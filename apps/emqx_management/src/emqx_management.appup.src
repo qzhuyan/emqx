@@ -1,0 +1,14 @@
+%% -*-: erlang -*-
+
+{VSN,
+  [
+    {<<".*">>, [
+      {restart_application, emqx_management}
+    ]}
+  ],
+  [
+    {<<".*">>, [
+      {restart_application, emqx_management}
+    ]}
+  ]
+}.

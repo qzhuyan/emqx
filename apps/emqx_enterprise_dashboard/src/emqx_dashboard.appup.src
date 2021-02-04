@@ -1,0 +1,28 @@
+Up = [
+    {apply, {emqx_modules, load_providers, []}},
+    {apply, {emqx_modules, refresh_module, [lwm2m_protocol]}},
+    {apply, {emqx_modules, refresh_module, [exhook]}},
+    {apply, {emqx_modules, refresh_module, [exproto]}},
+    {apply, {emqx_rule_engine, load_providers, []}},
+    {apply, {emqx_rule_engine, refresh_resource, [backend_mysql]}},
+    {apply, {emqx_rule_engine, refresh_rules, []}},
+    {restart_application, emqx_dashboard},
+    {apply, {emqx_plugins, load, []}}
+],
+
+Down = [
+    {apply, {emqx_modules, load_providers, []}},
+    {apply, {emqx_modules, refresh_modules, []}},
+    {apply, {emqx_rule_engine, load_providers, []}},
+    {apply, {emqx_rule_engine, refresh_resources, []}},
+    {apply, {emqx_rule_engine, refresh_rules, []}},
+    {restart_application, emqx_dashboard},
+    {apply, {emqx_plugins, load, []}}
+],
+
+{VSN,
+ [ {<<".*">>, Up}
+ ],
+ [ {<<".*">>, Down}
+ ]
+}.
