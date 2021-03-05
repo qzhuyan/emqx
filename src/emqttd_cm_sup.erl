@@ -41,9 +41,15 @@ init([]) ->
     %% Create client table
     create_client_tab(),
 
+    PoolSize = case erlang:system_info(schedulers_online) of
+                   Schs when Schs < 32 ->
+                       32;
+                   Schs -> Schs
+               end,
+
     %% CM Pool Sup
     MFA = {?CM, start_link, [emqttd_stats:statsfun('clients/count', 'clients/max')]},
-    PoolSup = emqttd_pool_sup:spec([?CM, hash, erlang:system_info(schedulers), MFA]),
+    PoolSup = emqttd_pool_sup:spec([?CM, hash, PoolSize, MFA]),
 
     {ok, {{one_for_all, 10, 3600}, [PoolSup]}}.
 
