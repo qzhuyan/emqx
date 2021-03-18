@@ -277,25 +277,29 @@ resume_session(Session = #mqtt_session{client_id = ClientId, sess_pid = SessPid}
     end.
 
 %% Local node
-destroy_session(Session = #mqtt_session{client_id = ClientId, sess_pid  = SessPid})
-    when node(SessPid) =:= node() ->
-    emqttd_session:destroy(SessPid, ClientId),
-    remove_session(Session);
+destroy_session(Session = #mqtt_session{client_id = _ClientId, sess_pid  = SessPid}) ->
+    exit(SessPid, kill),
+    remove_session(Session).
 
-%% Remote node
-destroy_session(Session = #mqtt_session{client_id = ClientId, sess_pid  = SessPid}) ->
-    Node = node(SessPid),
-    case rpc:call(Node, emqttd_session, destroy, [SessPid, ClientId]) of
-        ok ->
-            remove_session(Session);
-        {badrpc, nodedown} ->
-            ?LOG(error, "Node '~s' down", [Node], Session),
-            remove_session(Session);
-        {badrpc, Reason} ->
-            ?LOG(error, "Failed to destory ~p on remote node ~p for ~s",
-                 [SessPid, Node, Reason], Session),
-            {error, Reason}
-     end.
+%% destroy_session(Session = #mqtt_session{client_id = ClientId, sess_pid  = SessPid})
+%%     when node(SessPid) =:= node() ->
+%%     emqttd_session:destroy(SessPid, ClientId),
+%%     remove_session(Session);
+
+%% %% Remote node
+%% destroy_session(Session = #mqtt_session{client_id = ClientId, sess_pid  = SessPid}) ->
+%%     Node = node(SessPid),
+%%     case rpc:call(Node, emqttd_session, destroy, [SessPid, ClientId]) of
+%%         ok ->
+%%             remove_session(Session);
+%%         {badrpc, nodedown} ->
+%%             ?LOG(error, "Node '~s' down", [Node], Session),
+%%             remove_session(Session);
+%%         {badrpc, Reason} ->
+%%             ?LOG(error, "Failed to destory ~p on remote node ~p for ~s",
+%%                  [SessPid, Node, Reason], Session),
+%%             {error, Reason}
+%%     end.
 
 remove_session(Session) ->
     mnesia:dirty_delete_object(Session).
