@@ -48,6 +48,13 @@ start_link(Pool, Type, Size, MFA) ->
 %% sup_name(Pool) when is_atom(Pool) ->
 %%    list_to_atom(atom_to_list(Pool) ++ "_pool_sup").
 
+init([Pool, Type, -1, {M, F, Args}]) ->
+    %% compute a pool size
+    %% hyper-thread enabled x 8
+    %% hyper-thread disabled x 16
+    PoolSize = erlang:system_info(schedulers_online) * 8,
+    init([Pool, Type, PoolSize, {M, F, Args}]);
+
 init([Pool, Type, Size, {M, F, Args}]) ->
     ensure_pool(Pool, Type, [{size, Size}]),
     {ok, {{one_for_one, 10, 3600}, [

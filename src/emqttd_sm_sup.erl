@@ -46,7 +46,7 @@ init([]) ->
 
     %% SM Pool Sup
     MFA = {emqttd_sm, start_link, []},
-    PoolSup = emqttd_pool_sup:spec([emqttd_sm, hash, erlang:system_info(schedulers), MFA]),
+    PoolSup = emqttd_pool_sup:spec([emqttd_sm, hash, -1, MFA]),
 
     {ok, {{one_for_all, 10, 3600}, [Helper, PoolSup]}}.
 
