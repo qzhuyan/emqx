@@ -228,6 +228,8 @@ create_session(CleanSess, {ClientId, Username}, ClientPid) ->
                 {aborted, {conflict, ConflictPid}} ->
                     %% Conflict with othe node?
                     lager:error("SM(~s): Conflict with ~p", [ClientId, ConflictPid]),
+                    %% Destroy this new session since sessionPresent in CONNACK will be set to false.
+                    exit(SessPid, kill),
                     {error, mnesia_conflict};
                 {atomic, ok} ->
                     {ok, SessPid}
