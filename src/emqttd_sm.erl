@@ -226,10 +226,11 @@ create_session(CleanSess, {ClientId, Username}, ClientPid) ->
             Session = #mqtt_session{client_id = ClientId, sess_pid = SessPid, clean_sess = CleanSess},
             case insert_session(Session) of
                 {aborted, {conflict, ConflictPid}} ->
-                    %% Conflict with othe node?
+                    %% Conflict with other node!
                     lager:error("SM(~s): Conflict with ~p", [ClientId, ConflictPid]),
-                    %% Destroy this new session since sessionPresent in CONNACK will be set to false.
-                    exit(SessPid, kill),
+                    %% Destroy this new session since sessionPresent in CONNACK will be set to false
+                    %% Use destroy call to ensure entry in mqtt_local_session is cleared.
+                    emqttd_session:destroy(SessPid, ClientId),
                     {error, mnesia_conflict};
                 {atomic, ok} ->
                     {ok, SessPid}
