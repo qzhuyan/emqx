@@ -389,7 +389,9 @@ inc_stats(Type, PktPos, PktCnt, MsgPos, MsgCnt, Stats) ->
         false -> Stats1
     end.
 
-stop_if_auth_failure(RC, State) when RC == ?CONNACK_CREDENTIALS; RC == ?CONNACK_AUTH ->
+stop_if_auth_failure(RC, State) when RC == ?CONNACK_CREDENTIALS;
+                                     RC == ?CONNACK_AUTH;
+                                     RC == ?CONNACK_SERVER ->
     {stop, {shutdown, auth_failure}, State};
 
 stop_if_auth_failure(_RC, State) ->
