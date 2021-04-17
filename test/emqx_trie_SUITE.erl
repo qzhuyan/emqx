@@ -47,8 +47,8 @@ t_mnesia(_) ->
     ok = ?TRIE:mnesia(copy).
 
 t_insert(_) ->
-    TN = #trie_node{node_id = <<"sensor">>,
-                    edge_count = 3,
+    TN = #trie_node{node_id = [<<"sensor">>],
+                    edge_count = 2,
                     topic = <<"sensor">>,
                     flags = undefined
                    },
@@ -70,7 +70,8 @@ t_match(_) ->
               ?TRIE:insert(<<"sensor/#">>),
               ?TRIE:match(<<"sensor/1">>)
             end,
-    ?assertEqual({atomic, Machted}, trans(Fun)).
+    {atomic, Res} = trans(Fun),
+    ?assertEqual(lists:sort(Machted), lists:sort(Res)).
 
 t_match2(_) ->
     Matched = {[<<"+/+/#">>, <<"+/#">>, <<"#">>], []},
@@ -87,6 +88,7 @@ t_match3(_) ->
     Topics = [<<"d/#">>, <<"a/b/c">>, <<"a/b/+">>, <<"a/#">>, <<"#">>, <<"$SYS/#">>],
     trans(fun() -> [emqx_trie:insert(Topic) || Topic <- Topics] end),
     Matched = mnesia:async_dirty(fun emqx_trie:match/1, [<<"a/b/c">>]),
+    ct:pal("matched ~p", [Matched]),
     ?assertEqual(4, length(Matched)),
     SysMatched = mnesia:async_dirty(fun emqx_trie:match/1, [<<"$SYS/a/b/c">>]),
     ?assertEqual([<<"$SYS/#">>], SysMatched).
@@ -99,8 +101,8 @@ t_empty(_) ->
     ?assert(?TRIE:empty()).
 
 t_delete(_) ->
-    TN = #trie_node{node_id = <<"sensor/1">>,
-                    edge_count = 2,
+    TN = #trie_node{node_id = [<<"sensor">>, <<"1">>],
+                    edge_count = 1,
                     topic = undefined,
                     flags = undefined},
     Fun = fun() ->
@@ -142,10 +144,60 @@ t_delete3(_) ->
     ?assertEqual({atomic, {[], []}}, trans(Fun)).
 
 t_triples(_) ->
-    Triples = [{root,<<"a">>,<<"a">>},
-               {<<"a">>,<<"b">>,<<"a/b">>},
-               {<<"a/b">>,<<"c">>,<<"a/b/c">>}],
+    %% Triples = [{root,<<"a">>,<<"a">>},
+    %%            {<<"a">>,<<"b">>,<<"a/b">>},
+    %%            {<<"a/b">>,<<"c">>,<<"a/b/c">>}],
+    Triples = [{root,[<<"a">>,<<"b">>,<<"c">>], [<<"a">>,<<"b">>,<<"c">>]}],
     ?assertEqual(Triples, emqx_trie:triples(<<"a/b/c">>)).
+
+t_triples2(_) ->
+    %% Triples = [{root,<<"a">>,<<"a">>},
+    %%            {<<"a">>,<<"b">>,<<"a/b">>},
+    %%            {<<"a/b">>,<<"c">>,<<"a/b/c">>}],
+    Triples = [{root,
+                [<<"a">>,<<"b">>,<<"c">>],
+                [<<"a">>,<<"b">>,<<"c">>]},
+               {[<<"a">>,<<"b">>,<<"c">>],
+                '+',
+                [<<"a">>,<<"b">>,<<"c">>,'+']},
+               {[<<"a">>,<<"b">>,<<"c">>,'+'],
+                [<<"e">>,<<"f">>,<<"g">>],
+                [<<"a">>,<<"b">>,<<"c">>,'+',<<"e">>,<<"f">>,
+                 <<"g">>]},
+               {[<<"a">>,<<"b">>,<<"c">>,'+',<<"e">>,<<"f">>,
+                 <<"g">>],
+                '#',
+                [<<"a">>,<<"b">>,<<"c">>,'+',<<"e">>,<<"f">>,
+                 <<"g">>,'#']}],
+    ?assertEqual(Triples, emqx_trie:triples(<<"a/b/c/+/e/f/g/#">>)).
+
+t_partition(_) ->
+    Res = [ ["a","b","c"],
+            '+',
+            ["e","f"],
+            '#' ],
+    ?assertEqual(Res, emqx_trie:partition(["a","b", "c", '+', "e", "f", '#'])).
+
+t_partition2(_) ->
+    Res = [["a", "b", "c", "e", "f"]],
+    ?assertEqual(Res, emqx_trie:partition(["a", "b", "c", "e", "f"])).
+
+t_partition3(_) ->
+    Res = [["a"], '+', '#'],
+    ?assertEqual(Res, emqx_trie:partition(["a", '+', '#'])),
+    ?assertEqual(['#'], emqx_trie:partition(['#'])).
+
+t_subtopics(_) ->
+    Res = [{root,["a","b","c","d","e"]},
+           {["a"],["b","c","d","e"]},
+           {["a","b"],["c","d","e"]},
+           {["a","b","c"],["d","e"]},
+           {["a","b","c","d"],["e"]},
+           {["a","b","c","d","e"],[]}],
+    ?assertEqual(Res, emqx_trie:sub_topics(["a", "b", "c", "d", "e"])),
+    ?assertEqual([{root, []}], emqx_trie:sub_topics([])),
+    ?assertEqual([{root, [a]}, {[a], []}], emqx_trie:sub_topics([a])).
+
 
 clear_tables() ->
     lists:foreach(fun mnesia:clear_table/1, ?TRIE_TABS).

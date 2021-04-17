@@ -29,6 +29,8 @@
         , match/1
         , lookup/1
         , delete/1
+        , match_node/3
+        , partition/1
         ]).
 
 -export([empty/0]).
@@ -82,7 +84,7 @@ mnesia(copy) ->
 %% @doc Insert a topic filter into the trie.
 -spec(insert(emqx_topic:topic()) -> ok).
 insert(Topic) when is_binary(Topic) ->
-    case mnesia:wread({?TRIE_NODE_TAB, Topic}) of
+    case mnesia:wread({?TRIE_NODE_TAB, emqx_topic:words(Topic)}) of
         [#trie_node{topic = Topic}] ->
             ok;
         [TrieNode = #trie_node{topic = undefined}] ->
@@ -91,27 +93,28 @@ insert(Topic) when is_binary(Topic) ->
             %% Add trie path
             ok = lists:foreach(fun add_path/1, triples(Topic)),
             %% Add last node
-            write_trie_node(#trie_node{node_id = Topic, topic = Topic})
+            write_trie_node(#trie_node{node_id = emqx_topic:words(Topic), topic = Topic})
     end.
 
 %% @doc Find trie nodes that match the topic name.
 -spec(match(emqx_topic:topic()) -> list(emqx_topic:topic())).
 match(Topic) when is_binary(Topic) ->
-    TrieNodes = match_node(root, emqx_topic:words(Topic)),
+    TrieNodes = match_node(emqx_topic:words(Topic)),
     [Name || #trie_node{topic = Name} <- TrieNodes, Name =/= undefined].
 
 %% @doc Lookup a trie node.
 -spec(lookup(NodeId :: binary()) -> [trie_node()]).
 lookup(NodeId) ->
-    mnesia:read(?TRIE_NODE_TAB, NodeId).
+    mnesia:read(?TRIE_NODE_TAB, emqx_topic:words(NodeId)).
 
 %% @doc Delete a topic filter from the trie.
 -spec(delete(emqx_topic:topic()) -> ok).
-delete(Topic) when is_binary(Topic) ->
+delete(Topic0) when is_binary(Topic0) ->
+    Topic = emqx_topic:words(Topic0),
     case mnesia:wread({?TRIE_NODE_TAB, Topic}) of
         [#trie_node{edge_count = 0}] ->
             ok = mnesia:delete({?TRIE_NODE_TAB, Topic}),
-            delete_path(lists:reverse(triples(Topic)));
+            delete_path(lists:reverse(triples(Topic0)));
         [TrieNode] ->
             write_trie_node(TrieNode#trie_node{topic = undefined});
         [] -> ok
@@ -129,18 +132,24 @@ empty() ->
 %% @doc Topic to triples.
 -spec(triples(emqx_topic:topic()) -> list(triple())).
 triples(Topic) when is_binary(Topic) ->
-    triples(emqx_topic:words(Topic), root, []).
+    triples(partition(emqx_topic:words(Topic)), root, []).
 
 triples([], _Parent, Acc) ->
     lists:reverse(Acc);
-triples([W|Words], Parent, Acc) ->
+triples([W | Words], Parent, Acc) ->
     Node = join(Parent, W),
     triples(Words, Node, [{Parent, W, Node}|Acc]).
 
+join(root, W) when is_atom(W) ->
+    [W];
 join(root, W) ->
-    emqx_topic:join([W]);
-join(Parent, W) ->
-    emqx_topic:join([Parent, W]).
+    W;
+join(Parent, X) when is_atom(X)->
+    join(Parent, [X]);
+join(Parent, X) when is_atom(Parent)->
+    join([Parent], X);
+join(Parent, X) ->
+    Parent ++ X.
 
 %% @private
 %% @doc Add a path to the trie.
@@ -155,28 +164,56 @@ add_path({Node, Word, Child}) ->
                 [_] -> ok
             end;
         [] ->
-            ok = write_trie_node(#trie_node{node_id = Node, edge_count = 1}),
+            NodeId = case Node of
+                         '#' -> ['#'];
+                         '+' -> ['+'];
+                         _ -> Node
+                     end,
+            ok = write_trie_node(#trie_node{node_id = NodeId, edge_count = 1}),
             write_trie(#trie{edge = Edge, node_id = Child})
     end.
 
 %% @private
-%% @doc Match node with word or '+'.
-match_node(root, [NodeId = <<$$, _/binary>>|Words]) ->
-    match_node(NodeId, Words, []);
+-spec match_node([binary()]) -> [trie_node()].
+match_node(Topic) ->
+    lists:foldl(fun({Sub, Left}, Acc) ->
+                        match_node(Sub, Left, Acc)
+                end, [], sub_topics(Topic)).
 
-match_node(NodeId, Words) ->
-    match_node(NodeId, Words, []).
 
-match_node(NodeId, [], ResAcc) ->
-    mnesia:read(?TRIE_NODE_TAB, NodeId) ++ 'match_#'(NodeId, ResAcc);
+match_node(_Sub, [], ResAcc) ->
+    ResAcc;
+match_node(Sub, [This | LeftLevels], ResAcc) ->
+    case mnesia:read(?TRIE_NODE_TAB, Sub) of
+        [#trie_node{node_id = ParentId}] ->
+            lists:foldl(fun(X, Acc) ->
+                                case mnesia:read(?TRIE_NODE_TAB, maybe_root(ParentId) ++ [X]) of
+                                    [Child] when X == '#' ->
+                                        [Child | Acc];
+                                    [#trie_node{}] when X == '+' andalso
+                                                        length(This) > 1 ->
+                                        %% avoid '+' hit a multi-level target.
+                                        Acc;
+                                    [#trie_node{} = Child] when LeftLevels == []
+                                                                andalso X =='#' ->
+                                        [Child | Acc];
+                                    [#trie_node{node_id = ChildId} = Child] when LeftLevels == [] ->
+                                        'match_#'(ChildId, [Child | Acc]);
+                                    [#trie_node{}] when ParentId =:= root andalso not is_atom(X) ->
+                                        Acc;
+                                    [#trie_node{node_id = ChildId}] ->
+                                        [_ | Left] = LeftLevels,
+                                        match_node(ChildId, Left, Acc);
+                                    [] ->
+                                        Acc
+                                end
+                        end, ResAcc, ['#', '+', This]);
+        [] ->
+            ResAcc
+    end.
 
-match_node(NodeId, [W|Words], ResAcc) ->
-    lists:foldl(fun(WArg, Acc) ->
-        case mnesia:read(?TRIE_TAB, #trie_edge{node_id = NodeId, word = WArg}) of
-            [#trie{node_id = ChildId}] -> match_node(ChildId, Words, Acc);
-            [] -> Acc
-        end
-    end, 'match_#'(NodeId, ResAcc), [W, '+']).
+maybe_root(root) -> [];
+maybe_root(Other) -> Other.
 
 %% @private
 %% @doc Match node with '#'.
@@ -213,3 +250,29 @@ write_trie(Trie) ->
 write_trie_node(TrieNode) ->
     mnesia:write(?TRIE_NODE_TAB, TrieNode, write).
 
+partition(L) ->
+    partition(L, [], []).
+partition([], [], Acc) ->
+    lists:reverse(Acc);
+partition([], Part, Acc) ->
+    lists:reverse([lists:reverse(Part) | Acc]);
+partition(["" | T], Part, Acc) ->
+    partition(T, Part, Acc);
+partition([H | T], [], Acc) when H == '#' orelse H == '+' ->
+    partition(T, [], [H | Acc]);
+partition([H | T], Part, Acc) when H == '#' orelse H == '+' ->
+    partition(T, [], [H, lists:reverse(Part) | Acc]);
+partition([H | T], Part, Acc) ->
+    partition(T, [ H | Part ], Acc).
+
+sub_topics(Topic) ->
+    Levels = length(Topic),
+    sub_topics(Levels, Topic, []).
+
+sub_topics(0, [<<$$, _/binary>> | _], Res) ->
+    Res;
+sub_topics(0, Topic, Res) ->
+    [{root, Topic} | Res];
+sub_topics(Level, Topic, Res) ->
+    This = {lists:sublist(Topic, 1, Level), lists:sublist(Topic, Level+1, length(Topic))},
+    sub_topics(Level -1, Topic, [This | Res]).
