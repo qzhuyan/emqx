@@ -118,7 +118,12 @@ do_add_route(Topic, Dest) when is_binary(Topic) ->
         false ->
             ok = emqx_router_helper:monitor(Dest),
             case emqx_topic:wildcard(Topic) of
-                true  -> trans(fun insert_trie_route/1, [Route]);
+                true  ->
+                    lock_router(),
+                    try trans(fun insert_trie_route/1, [Route])
+                    after
+                        unlock_router()
+                    end;
                 false -> insert_direct_route(Route)
             end
     end.
@@ -164,7 +169,12 @@ do_delete_route(Topic) when is_binary(Topic) ->
 do_delete_route(Topic, Dest) ->
     Route = #route{topic = Topic, dest = Dest},
     case emqx_topic:wildcard(Topic) of
-        true  -> trans(fun delete_trie_route/1, [Route]);
+        true  ->
+            lock_router(),
+            try trans(fun delete_trie_route/1, [Route])
+            after
+                unlock_router()
+            end;
         false -> delete_direct_route(Route)
     end.
 
@@ -227,7 +237,6 @@ insert_direct_route(Route) ->
     mnesia:async_dirty(fun mnesia:write/3, [?ROUTE_TAB, Route, sticky_write]).
 
 insert_trie_route(Route = #route{topic = Topic}) ->
-    lock_router(),
     case mnesia:wread({?ROUTE_TAB, Topic}) of
         [] -> emqx_trie:insert(Topic);
         _  -> ok
@@ -250,12 +259,11 @@ delete_trie_route(Route = #route{topic = Topic}) ->
 %% @private
 -spec(trans(function(), list(any())) -> ok | {error, term()}).
 trans(Fun, Args) ->
-    case mnesia:transaction(Fun, Args) of
-        {atomic, Ok} -> Ok;
-        {aborted, Reason} -> {error, Reason}
-    end.
+    mnesia:sync_dirty(Fun, Args).
 
 lock_router() ->
     %% @todo also check emqx_trie and emqx_trie_route table?
-    {Nodes, _} = mnesia:table_info(emqx_route, where_to_wlock),
-    mnesia:lock({global, ?MODULE, Nodes}, write).
+    global:set_lock({?MODULE, route}).
+
+unlock_router() ->
+    global:del_lock({?MODULE, route}).
