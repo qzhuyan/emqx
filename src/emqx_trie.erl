@@ -82,7 +82,13 @@ mnesia(copy) ->
 %% @doc Insert a topic filter into the trie.
 -spec(insert(emqx_topic:topic()) -> ok).
 insert(Topic) when is_binary(Topic) ->
-    Paths = triples(Topic),
+    case mnesia:wread({?TRIE_NODE_TAB, Topic}) of
+        [#trie_node{topic = Topic}] ->
+            ok;
+        [TrieNode = #trie_node{topic = undefined}] ->
+            write_trie_node(TrieNode#trie_node{topic = Topic});
+        [] ->
+            Paths = triples(Topic),
             case length(ekka_mnesia:running_nodes()) > 1 andalso length(Paths) > 4 of
                 true ->
                     %% take whole table lock to save mnesia remote lock overheads.
@@ -91,12 +97,6 @@ insert(Topic) when is_binary(Topic) ->
                 false ->
                     skip
             end,
-    case mnesia:wread({?TRIE_NODE_TAB, Topic}) of
-        [#trie_node{topic = Topic}] ->
-            ok;
-        [TrieNode = #trie_node{topic = undefined}] ->
-            write_trie_node(TrieNode#trie_node{topic = Topic});
-        [] ->
             %% Add trie path
             ok = lists:foreach(fun add_path/1, Paths),
             %% Add last node
