@@ -231,8 +231,7 @@ delivery(Msg) -> #delivery{sender = self(), message = Msg}.
 -spec(route([emqx_types:route_entry()], emqx_types:delivery())
       -> emqx_types:publish_result()).
 route([], #delivery{message = Msg}) ->
-    ok = emqx_hooks:run('message.dropped', [Msg, #{node => node()}, no_subscribers]),
-    ok = inc_dropped_cnt(Msg),
+    run_hook_msg_dropped(Msg),
     [];
 
 route(Routes, Delivery) ->
@@ -282,14 +281,13 @@ forward(Node, To, Delivery, sync) ->
 
 -spec(dispatch(emqx_topic:topic(), emqx_types:delivery()) -> emqx_types:deliver_result()).
 dispatch(Topic, #delivery{message = Msg}) ->
+    run_hook_msg_dropped(Msg),
     DispN = lists:foldl(
                 fun(Sub, N) ->
                     N + dispatch(Sub, Topic, Msg)
                 end, 0, subscribers(Topic)),
     case DispN of
         0 ->
-            ok = emqx_hooks:run('message.dropped', [Msg, #{node => node()}, no_subscribers]),
-            ok = inc_dropped_cnt(Msg),
             {error, no_subscribers};
         _ ->
             {ok, DispN}
@@ -336,12 +334,7 @@ subscriber_down(SubPid) ->
               SubOpts when is_map(SubOpts) ->
                   _ = emqx_broker_helper:reclaim_seq(Topic),
                   true = ets:delete(?SUBOPTION, {SubPid, Topic}),
-                  case maps:get(shard, SubOpts, 0) of
-                      0 -> true = ets:delete_object(?SUBSCRIBER, {Topic, SubPid}),
-                           ok = cast(pick(Topic), {unsubscribed, Topic});
-                      I -> true = ets:delete_object(?SUBSCRIBER, {{shard, Topic, I}, SubPid}),
-                           ok = cast(pick({Topic, I}), {unsubscribed, Topic, I})
-                  end;
+                  ok = do_unsubscribe(undefined, Topic, SubPid, SubOpts);
               undefined -> ok
           end
       end, lookup_value(?SUBSCRIPTION, SubPid, [])),
@@ -498,3 +491,6 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal functions
 %%--------------------------------------------------------------------
 
+run_hook_msg_dropped(Msg) ->
+    ok = emqx_hooks:run('message.dropped', [Msg, #{node => node()}, no_subscribers]),
+    ok = inc_dropped_cnt(Msg).
