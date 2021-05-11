@@ -1983,13 +1983,8 @@ end}.
 %%--------------------------------------------------------------------
 %% MQTT/QUIC SSL Listeners
 
-{mapping, "listener.quic.$name", "emqx.listeners", [
+{mapping, "listener.quic.$name.endpoint", "emqx.listeners", [
   {datatype, [integer, ip]}
-]}.
-
-{mapping, "listener.quic.$name.mqtt_path", "emqx.listeners", [
-  {default, "/mqtt"},
-  {datatype, string}
 ]}.
 
 {mapping, "listener.quic.$name.acceptors", "emqx.listeners", [
@@ -2016,16 +2011,6 @@ end}.
 ]}.
 
 {mapping, "listener.quic.$name.rate_limit", "emqx.listeners", [
-  {datatype, string}
-]}.
-
-{mapping, "listener.quic.$name.fail_if_no_subprotocol", "emqx.listeners", [
-  {default, true},
-  {datatype, {enum, [true, false]}}
-]}.
-
-{mapping, "listener.quic.$name.supported_subprotocols", "emqx.listeners", [
-  {default, "mqtt, mqtt-v3, mqtt-v3.1.1, mqtt-v5"},
   {datatype, string}
 ]}.
 
