@@ -1,11 +1,13 @@
 name: Functional Verification Tests
 
-on:
-  push:
-    tags:
-      - v*
-      - e*
-  pull_request:
+# on:
+#   push:
+#     tags:
+#       - v*
+#       - e*
+#   pull_request:
+
+on: [push]
 
 jobs:
     docker_test:
