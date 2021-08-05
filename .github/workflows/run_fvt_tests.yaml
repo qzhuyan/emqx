@@ -192,6 +192,7 @@ jobs:
                 --set emqxConfig.EMQX_ZONES__DEFAULT__MQTT__MAX_TOPIC_ALIAS=10 \
                 --set persistence.enabled=true \
                 --set persistence.storageClass=local-path \
+                --set containerSecurityContext.enabled=false \
                 deploy/charts/emqx \
                 --debug --wait
 
@@ -223,6 +224,7 @@ jobs:
                 --set emqxConfig.EMQX_ZONES__DEFAULT__MQTT__MAX_TOPIC_ALIAS=10 \
                 --set persistence.enabled=true \
                 --set persistence.storageClass=local-path \
+                --set containerSecurityContext.enabled=false \
                 deploy/charts/emqx \
                 --debug --wait
 
