@@ -176,9 +176,14 @@ jobs:
             fi
             exit $RESULT
 
+        - name: Delete deployment
+          run: |
+            helm delete emqx
+
         - name: Test Deploy with PVC
           run: |
             helm install emqx-pvc \
+                --debug \
                 --set image.repository=${TARGET} \
                 --set image.pullPolicy=Never \
                 --set emqxAclConfig="" \
@@ -189,6 +194,18 @@ jobs:
                 --set persistence.storageClass=local-path \
                 deploy/charts/emqx \
                 --debug --wait
+
+        - name: Check deployment
+          if: always()
+          run: |
+            kubectl describe sts emqx-pvc
+            kubectl get pvc -l app.kubernetes.io/instance=emqx-pvc -o yaml
+            for pod_n in 0 1 2;
+              do
+               kubectl describe pod "emqx-pvc-$pod_n"
+               kubectl get pod "emqx-pvc-$pod_n" -o yaml
+               kubectl logs "emqx-pvc-$pod_n"
+              done
 
         - name: Delete deployment
           run: |
@@ -197,6 +214,7 @@ jobs:
         - name: Test redeploy with PVC
           run: |
             helm install emqx-pvc \
+                --debug \
                 --set image.repository=${TARGET} \
                 --set image.pullPolicy=Never \
                 --set emqxAclConfig="" \
@@ -207,6 +225,11 @@ jobs:
                 --set persistence.storageClass=local-path \
                 deploy/charts/emqx \
                 --debug --wait
+
+        - name: clean chart
+          if: always()
+          run: |
+            helm delete emqx-pvc
 
         - name: clean PVC
           if: always()
