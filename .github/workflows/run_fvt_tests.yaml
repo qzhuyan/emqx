@@ -66,6 +66,8 @@ jobs:
 
     helm_test:
         runs-on: ubuntu-20.04
+        env:
+          KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
 
         steps:
         - uses: actions/checkout@v1
@@ -89,24 +91,18 @@ jobs:
         - name: make emqx image
           run: make $PROFILE-docker
         - name: install k3s
-          env:
-            KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
           run: |
             sudo sh -c "echo \"127.0.0.1 $(hostname)\" >> /etc/hosts"
             curl -sfL https://get.k3s.io | sh -
             sudo chmod 644 /etc/rancher/k3s/k3s.yaml
             kubectl cluster-info
         - name: install helm
-          env:
-            KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
           run: |
             curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
             sudo chmod 700 get_helm.sh
             sudo ./get_helm.sh
             helm version
         - name: run emqx on chart
-          env:
-            KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
           timeout-minutes: 5
           run: |
             version=$(./pkg-vsn.sh)
@@ -136,8 +132,6 @@ jobs:
             done
         - name: get emqx-0 pods log
           if: failure()
-          env:
-            KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
           run: |
             kubectl describe pods emqx-0
             kubectl logs emqx-0
@@ -181,6 +175,41 @@ jobs:
                 kubectl logs emqx-2
             fi
             exit $RESULT
+
+        - name: Test Deploy with PVC
+          run: |
+            helm install emqx-pvc \
+                --set image.repository=${TARGET} \
+                --set image.pullPolicy=Never \
+                --set emqxAclConfig="" \
+                --set image.pullPolicy=Never \
+                --set emqxConfig.EMQX_ZONES__DEFAULT__MQTT__RETRY_INTERVAL=2s \
+                --set emqxConfig.EMQX_ZONES__DEFAULT__MQTT__MAX_TOPIC_ALIAS=10 \
+                --set persistence.enabled=true \
+                deploy/charts/emqx \
+                --debug --wait
+
+        - name: Delete deployment
+          run: |
+            helm delete emqx-pvc
+
+        - name: Test redeploy with PVC
+          run: |
+            helm install emqx-pvc \
+                --set image.repository=${TARGET} \
+                --set image.pullPolicy=Never \
+                --set emqxAclConfig="" \
+                --set image.pullPolicy=Never \
+                --set emqxConfig.EMQX_ZONES__DEFAULT__MQTT__RETRY_INTERVAL=2s \
+                --set emqxConfig.EMQX_ZONES__DEFAULT__MQTT__MAX_TOPIC_ALIAS=10 \
+                --set persistence.enabled=true \
+                deploy/charts/emqx \
+                --debug --wait
+
+        - name: clean PVC
+          if: always()
+          run: |
+            kubectl delete pvc -l app.kubernetes.io/instance=emqx-pvc
 
     relup_test:
         runs-on: ubuntu-20.04
