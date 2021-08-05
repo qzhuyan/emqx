@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 ## EMQ docker image start script
 # Huang Rui <vowstar@gmail.com>
 # EMQ X Team <support@emqx.io>
@@ -63,4 +63,7 @@ fill_tuples() {
 # When start emqx in docker, it's mostly one emqx node in one container
 export EMQX_RPC__PORT_DISCOVERY="${EMQX_RPC__PORT_DISCOVERY:-manual}"
 
+## check and set data dir permission
+ls -alt /opt/emqx/data
+#sudo chown -R emqx /opt/emqx/data
 exec "$@"
