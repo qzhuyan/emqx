@@ -65,5 +65,6 @@ export EMQX_RPC__PORT_DISCOVERY="${EMQX_RPC__PORT_DISCOVERY:-manual}"
 
 ## check and set data dir permission
 ls -alt /opt/emqx/data
-#sudo chown -R emqx /opt/emqx/data
+export RUNNER_USER=root
+
 exec "$@"
