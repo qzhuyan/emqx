@@ -182,6 +182,25 @@ jobs:
             fi
             exit $RESULT
 
+        - uses: balchua/microk8s-actions@v0.2.1
+          with:
+            channel: '1.19/stable'
+            addons: '["dns", "rbac", "storage", "registry", "metrics-server"]'
+        - name: Test MicroK8s
+          id: myactions
+          run: |
+            helm install emqx \
+                --set image.repository=${TARGET} \
+                --set image.pullPolicy=Never \
+                --set emqxAclConfig="" \
+                --set image.pullPolicy=Never \
+                --set emqxConfig.EMQX_ZONES__DEFAULT__MQTT__RETRY_INTERVAL=2s \
+                --set emqxConfig.EMQX_ZONES__DEFAULT__MQTT__MAX_TOPIC_ALIAS=10 \
+                --set service.type=NodePort --set persistence.enabled=true \
+                deploy/charts/emqx \
+                --debug \
+                -- wait
+
     relup_test:
         runs-on: ubuntu-20.04
         container: emqx/build-env:erl23.2.7.2-emqx-2-ubuntu20.04
