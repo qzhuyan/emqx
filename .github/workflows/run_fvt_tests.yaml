@@ -98,7 +98,6 @@ jobs:
           run: |
             version=$(./pkg-vsn.sh)
             sudo docker save ${TARGET}:$version -o emqx.tar.gz
-            sudo k3s ctr image import emqx.tar.gz
 
             sed -i -r "s/^appVersion: .*$/appVersion: \"${version}\"/g" deploy/charts/emqx/Chart.yaml
             sed -i '/emqx_telemetry/d' deploy/charts/emqx/values.yaml
