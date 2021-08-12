@@ -66,9 +66,6 @@ jobs:
 
     helm_test:
         runs-on: ubuntu-20.04
-        env:
-          KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
-
         steps:
         - uses: actions/checkout@v1
         - uses: gleam-lang/setup-erlang@v1.1.2
@@ -90,12 +87,11 @@ jobs:
             fi
         - name: make emqx image
           run: make $PROFILE-docker
-        - name: install k3s
-          run: |
-            sudo sh -c "echo \"127.0.0.1 $(hostname)\" >> /etc/hosts"
-            curl -sfL https://get.k3s.io | sh -
-            sudo chmod 644 /etc/rancher/k3s/k3s.yaml
-            kubectl cluster-info
+
+        - name: start minikube
+          id: minikube
+          uses: medyagh/setup-minikube@master
+
         - name: install helm
           run: |
             curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
@@ -137,15 +133,11 @@ jobs:
             kubectl logs emqx-0
         - name: get emqx-1 pods log
           if: failure()
-          env:
-            KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
           run: |
             kubectl describe pods emqx-1
             kubectl logs emqx-1
         - name: get emqx-2 pods log
           if: failure()
-          env:
-            KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
           run: |
             kubectl describe pods emqx-2
             kubectl logs emqx-2
@@ -159,8 +151,6 @@ jobs:
             pip install pytest
             echo "$HOME/.local/bin" >> $GITHUB_PATH
         - name: run paho test
-          env:
-            KUBECONFIG: "/etc/rancher/k3s/k3s.yaml"
           run: |
             emqx_svc=$(kubectl get svc --namespace default emqx -o jsonpath="{.spec.clusterIP}")
             emqx1=$(kubectl get pods emqx-1 -o jsonpath='{.status.podIP}')
