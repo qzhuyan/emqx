@@ -98,7 +98,7 @@ jobs:
           run: |
             version=$(./pkg-vsn.sh)
             sudo docker save ${TARGET}:$version -o emqx.tar.gz
-            minikube cache add ./emqx.tar.gz
+            minikube cache add ${TARGET}:$version
 
             sed -i -r "s/^appVersion: .*$/appVersion: \"${version}\"/g" deploy/charts/emqx/Chart.yaml
             sed -i '/emqx_telemetry/d' deploy/charts/emqx/values.yaml
