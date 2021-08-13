@@ -147,9 +147,13 @@ jobs:
             echo "$HOME/.local/bin" >> $GITHUB_PATH
         - name: run paho test
           run: |
-            emqx_svc=$(kubectl get svc --namespace default emqx -o jsonpath="{.spec.clusterIP}")
+
+            minikube ip
+            minikube service --url emqx
+            emqx_svc=$(kubectl get svc --namespace default emqx -o jsonpath="{.spec.ports[0].nodePort}")
             emqx1=$(kubectl get pods emqx-1 -o jsonpath='{.status.podIP}')
             emqx2=$(kubectl get pods emqx-2 -o jsonpath='{.status.podIP}')
+
 
             pytest -v paho.mqtt.testing/interoperability/test_client/V5/test_connect.py -k test_basic --host $emqx_svc
             RESULT=$?
