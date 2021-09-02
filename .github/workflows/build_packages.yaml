@@ -229,22 +229,22 @@ jobs:
         profile: ${{fromJSON(needs.prepare.outputs.profiles)}}
         os:
           - ubuntu20.04
-          - ubuntu18.04
-          - ubuntu16.04
-          - debian10
-          - debian9
-          # - opensuse
-          - centos8
-          - centos7
-          - centos6
-          - raspbian10
+          # - ubuntu18.04
+          # - ubuntu16.04
+          # - debian10
+          # - debian9
+          # # - opensuse
+          # - centos8
+          # - centos7
+          # - centos6
+          # - raspbian10
           # - raspbian9
         arch:
           - amd64
-          - arm64
+#          - arm64
         otp:
           - 23.2.7.2-emqx-2
-          - 24.0.5-emqx-1
+#          - 24.0.5-emqx-1
         exclude:
         - os: centos6
           arch: arm64
@@ -332,11 +332,12 @@ jobs:
             done
           cd -
         fi
-    - uses: actions/upload-artifact@v1
-      if: startsWith(github.ref, 'refs/tags/')
+    - uses: actions/upload-artifact@v2
+      #if: startsWith(github.ref, 'refs/tags/')
       with:
         name: ${{ matrix.profile }}-${{ matrix.otp }}
         path: source/_packages/${{ matrix.profile }}/.
+        retention-days: 2
 
   docker:
     runs-on: ubuntu-20.04
