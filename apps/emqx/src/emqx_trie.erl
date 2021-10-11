@@ -89,7 +89,7 @@ mnesia(boot) ->
     end;
 mnesia(copy) ->
     %% Copy topics table
-    ok = ekka_mnesia:copy_table(?TRIE, disc_copies),
+    ok = ekka_mnesia:copy_table(?TRIE, ram_copies),
     case emqx_persistent_session:is_store_enabled() of
         true  -> ok = ekka_mnesia:copy_table(?SESSION_TRIE, disc_copies);
         false -> ok
