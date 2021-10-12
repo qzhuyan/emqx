@@ -73,13 +73,13 @@ mnesia(boot) ->
     ok = ekka_mnesia:create_table(?ROUTE_TAB, [
                 {type, bag},
                 {rlog_shard, ?ROUTE_SHARD},
-                {ram_copies, [node()]},
+                {disc_copies, [node()]},
                 {record_name, route},
                 {attributes, record_info(fields, route)},
                 {storage_properties, [{ets, [{read_concurrency, true},
                                              {write_concurrency, true}]}]}]);
 mnesia(copy) ->
-    ok = ekka_mnesia:copy_table(?ROUTE_TAB, ram_copies).
+    ok = ekka_mnesia:copy_table(?ROUTE_TAB, disc_copies).
 
 %%--------------------------------------------------------------------
 %% Start a router
