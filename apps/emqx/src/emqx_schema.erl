@@ -1055,12 +1055,12 @@ In case PSK cipher suites are intended, make sure to configured
            })
       }
     , {"ciphers", ciphers_schema(D("ciphers"))}
-    , {user_lookup_fun,
-       sc(typerefl:alias("string", any()),
-          #{ default => "emqx_tls_psk:lookup"
-           , converter => fun ?MODULE:parse_user_lookup_fun/1
-           })
-      }
+    %% , {user_lookup_fun,
+    %%    sc(typerefl:alias("string", any()),
+    %%       #{ default => "emqx_tls_psk:lookup"
+    %%        , converter => fun ?MODULE:parse_user_lookup_fun/1
+    %%        })
+    %%   }
     , {"secure_renegotiate",
        sc(boolean(),
           #{ default => Df("secure_renegotiate", true)
