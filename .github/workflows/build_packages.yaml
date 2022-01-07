@@ -260,6 +260,11 @@ jobs:
         path: .
     - name: unzip source code
       run: unzip -q source.zip
+    - name: load rocksdb cache
+      uses: actions/cache@v2
+      with:
+        path: _build/default/lib/rocksdb/
+        key: 1.7.0-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.otp }}
     - name: downloads old emqx zip packages
       env:
         OTP_VSN: ${{ matrix.otp }}
