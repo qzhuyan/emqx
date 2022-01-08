@@ -35,6 +35,11 @@ jobs:
     - uses: actions/checkout@v1
     - name: build zip package
       run: make ${{ matrix.profile }}-zip
+    - name: load rocksdb cache
+      uses: actions/cache@v2
+      with:
+        path: _build/default/lib/rocksdb/
+        key: 1.7.0-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.otp }}
     - name: build deb/rpm packages
       run: make ${{ matrix.profile }}-pkg
     - name: packages test
