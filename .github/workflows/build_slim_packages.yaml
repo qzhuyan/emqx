@@ -35,11 +35,17 @@ jobs:
     - uses: actions/checkout@v1
     - name: build zip package
       run: make ${{ matrix.profile }}-zip
+    - name: rocksdb vsn
+      run: |
+        rebar3 get-deps
+        RocksDBRef=$(erl -noshell -eval '{ok,Raw}=file:consult("rebar.lock"), {_Vsn, Deps}=hd(Raw), {_, {git, _Url, {ref, Ref}},_} = lists:keyfind(<<"rocksdb">>,1, Deps), io:format("~s",[Ref]), init:stop().')
+        echo "::set-env name=DEP_ROCKSDB_REF::${RocksDBRef}"
+        make clean-all
     - name: load rocksdb cache
       uses: actions/cache@v2
       with:
         path: _build/default/lib/rocksdb/
-        key: 1.7.0-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.otp }}
+        key: ${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.otp }}-${DEP_ROCKSDB_REF}
     - name: build deb/rpm packages
       run: make ${{ matrix.profile }}-pkg
     - name: packages test
