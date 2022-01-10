@@ -39,12 +39,19 @@ jobs:
         rebar3 get-deps
         RocksDBRef=$(erl -noshell -eval '{ok,Raw}=file:consult("rebar.lock"), {_Vsn, Deps}=hd(Raw), {_, {git, _Url, {ref, Ref}},_} = lists:keyfind(<<"rocksdb">>,1, Deps), io:format("~s",[Ref]), init:stop().')
         echo "::set-output name=DEP_ROCKSDB_REF::${RocksDBRef}"
+        QuicerRef=$(erl -noshell -eval '{ok,Raw}=file:consult("rebar.lock"), {_Vsn, Deps}=hd(Raw), {_, {git, _Url, {ref, Ref}},_} = lists:keyfind(<<"rocksdb">>,1, Deps), io:format("~s",[Ref]), init:stop().')
+        echo "::set-output name=DEP_QUICER_REF::${QuicerRef}"
         make clean-all
     - name: load rocksdb cache
       uses: actions/cache@v2
       with:
         path: _build/default/lib/rocksdb/
         key: ${{ matrix.os }}-${{ matrix.otp }}-amd64-${{ steps.deps-refs.outputs.DEP_ROCKSDB_REF }}
+    - name: load quicer cache
+      uses: actions/cache@v2
+      with:
+        path: _build/default/lib/quicer/
+        key: ${{ matrix.os }}-${{ matrix.otp }}-amd64-${{ steps.deps-refs.outputs.DEP_QUICER_REF }}
     - name: build zip package
       run: make ${{ matrix.profile }}-zip
     - name: build deb/rpm packages
@@ -97,6 +104,28 @@ jobs:
         kerl update releases
         kerl build ${{ matrix.otp }}
         kerl install ${{ matrix.otp }} $HOME/.kerl/${{ matrix.otp }}
+    - name: Get deps git refs for cache
+      id: deps-refs
+      run: |
+        . $HOME/.kerl/${{ matrix.otp }}/activate
+        make ensure-rebar3
+        sudo cp rebar3 /usr/local/bin/rebar3
+        rebar3 get-deps
+        RocksDBRef=$(erl -noshell -eval '{ok,Raw}=file:consult("rebar.lock"), {_Vsn, Deps}=hd(Raw), {_, {git, _Url, {ref, Ref}},_} = lists:keyfind(<<"rocksdb">>,1, Deps), io:format("~s",[Ref]), init:stop().')
+        echo "::set-output name=DEP_ROCKSDB_REF::${RocksDBRef}"
+        QuicerRef=$(erl -noshell -eval '{ok,Raw}=file:consult("rebar.lock"), {_Vsn, Deps}=hd(Raw), {_, {git, _Url, {ref, Ref}},_} = lists:keyfind(<<"rocksdb">>,1, Deps), io:format("~s",[Ref]), init:stop().')
+        echo "::set-output name=DEP_QUICER_REF::${QuicerRef}"
+        make clean-all
+    - name: load rocksdb cache
+      uses: actions/cache@v2
+      with:
+        path: _build/default/lib/rocksdb/
+        key: ${{ matrix.os }}-${{ matrix.otp }}-macos-${{ steps.deps-refs.outputs.DEP_ROCKSDB_REF }}
+    - name: load quicer cache
+      uses: actions/cache@v2
+      with:
+        path: _build/default/lib/quicer/
+        key: ${{ matrix.os }}-${{ matrix.otp }}-macos-${{ steps.deps-refs.outputs.DEP_QUICER_REF }}
     - name: build ${{ matrix.profile }}
       run: |
         . $HOME/.kerl/${{ matrix.otp }}/activate
