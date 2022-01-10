@@ -33,8 +33,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
-    - name: build zip package
-      run: make ${{ matrix.profile }}-zip
     - name: rocksdb vsn
       run: |
         rebar3 get-deps
@@ -46,6 +44,8 @@ jobs:
       with:
         path: _build/default/lib/rocksdb/
         key: ${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.otp }}-${DEP_ROCKSDB_REF}
+    - name: build zip package
+      run: make ${{ matrix.profile }}-zip
     - name: build deb/rpm packages
       run: make ${{ matrix.profile }}-pkg
     - name: packages test
