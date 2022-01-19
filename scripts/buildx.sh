@@ -19,7 +19,7 @@ help() {
     echo "--pkgtype tgz|pkg:   Specify which package to build, tgz for .tar.gz"
     echo "                     and pkg for .rpm or .deb"
     echo "--arch amd64|arm64:  Target arch to build the EMQ X package for"
-    echo "--src_dir <SRC_DIR>: EMQ X source ode in this dir, default to PWD"
+    echo "--src_dir <SRC_DIR>: EMQ X source code in this dir, default to PWD"
     echo "--builder <BUILDER>: Builder image to pull"
     echo "                     E.g. ghcr.io/emqx/emqx-builder/4.4-4:24.1.5-3-debian10"
 }
