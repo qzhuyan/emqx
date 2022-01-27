@@ -558,8 +558,7 @@ jobs:
         working-directory: source
         run: |
           IsPushLatest=${{ github.event_name == 'release' && !github.event.release.prerelease }};
-          scripts/docker-create-push-manifest "${{ steps.meta.outputs.tags }}" "$IsPushLatest"
-
+          scripts/docker-create-push-manifests.sh "${{ steps.meta.outputs.tags }}" "$IsPushLatest"
 
   delete-artifact:
     runs-on: ubuntu-20.04
