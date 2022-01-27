@@ -454,7 +454,7 @@ jobs:
         password: ${{ secrets.DOCKER_HUB_TOKEN }}
     - uses: docker/build-push-action@v2
       with:
-        push: ${{ github.event_name == 'release' && !github.event.release.prerelease }}
+        push: ${{ github.event_name == 'release' && !github.event.release.prerelease }} || startsWith(github.head_ref, 'ci/william/')
         pull: true
         no-cache: true
         platforms: linux/${{ matrix.arch }}
@@ -483,7 +483,7 @@ jobs:
 
   docker-push-multi-arch-manifest:
     # note, we only run on amd64
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || startsWith(github.head_ref, 'ci/william/')
     needs: docker
     runs-on: ubuntu-latest
     strategy:
