@@ -555,6 +555,7 @@ jobs:
 
       - name: update manifest for multiarch image
         if: matrix.arch == 'amd64'
+        working-directory: source
         run: |
           IsPushLatest=${{ github.event_name == 'release' && !github.event.release.prerelease }};
           scripts/docker-create-push-manifest "${{ steps.meta.outputs.tags }}" "$IsPushLatest"
