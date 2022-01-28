@@ -64,6 +64,7 @@ jobs:
           path: source.zip
 
   windows:
+    if: false
     runs-on: windows-2019
 
     needs: prepare
@@ -136,6 +137,7 @@ jobs:
         path: source/_packages/${{ matrix.profile }}/.
 
   mac:
+    if: false
     needs: prepare
     strategy:
       fail-fast: false
@@ -230,6 +232,7 @@ jobs:
         path: source/_packages/${{ matrix.profile }}/.
 
   linux:
+    if: false
     needs: prepare
     runs-on: ${{ matrix.build_machine }}
     container:
