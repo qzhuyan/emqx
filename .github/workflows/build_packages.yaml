@@ -491,7 +491,7 @@ jobs:
       || (github.event.repository.owner != 'emqx' && startsWith(github.ref_name, 'ci/'))
     needs:
       - prepare
-      #- docker
+      - docker
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
