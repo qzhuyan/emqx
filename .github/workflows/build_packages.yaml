@@ -231,6 +231,9 @@ jobs:
   linux:
     needs: prepare
     runs-on: ${{ matrix.build_machine }}
+    container:
+      image: "ghcr.io/emqx/emqx-builder/5.0-5:${{ matrix.elixir }}-${{ matrix.otp }}-${{ matrix.os }}"
+
     strategy:
       fail-fast: false
       matrix:
