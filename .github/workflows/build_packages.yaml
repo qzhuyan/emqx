@@ -20,7 +20,6 @@ on:
 
 jobs:
   prepare:
-    if: false
     runs-on: ubuntu-20.04
     # prepare source with any OTP version, no need for a matrix
     container: "ghcr.io/emqx/emqx-builder/5.0-5:1.13.2-24.1.5-4-ubuntu20.04"
@@ -232,7 +231,8 @@ jobs:
         path: source/_packages/${{ matrix.profile }}/.
 
   linux:
-    #needs: prepare
+    if: false
+    needs: prepare
     runs-on: ${{ matrix.build_machine }}
     container:
       image: "ghcr.io/emqx/emqx-builder/5.0-5:${{ matrix.elixir }}-${{ matrix.otp }}-${{ matrix.os }}"
