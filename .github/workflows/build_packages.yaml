@@ -293,19 +293,6 @@ jobs:
           profile: emqx-enterprise
         - os: raspbian10
           profile: emqx-enterprise
-        include:
-          - profile: emqx
-            otp: 24.1.5-4
-            elixir: 1.13.2
-            arch: amd64
-            build_elixir: with_elixir
-            os: ubuntu20.04
-          - profile: emqx
-            otp: 24.1.5-4
-            elixir: 1.13.2
-            arch: amd64
-            build_elixir: with_elixir
-            os: centos8
 
     defaults:
       run:
