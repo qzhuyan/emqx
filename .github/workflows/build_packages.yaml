@@ -470,6 +470,7 @@ jobs:
             elixir: 1.13.2
             arch: amd64
             build_elixir: with_elixir
+            build_machine: ubuntu-20.04
 
     steps:
     - uses: AutoModality/action-clean@v1
