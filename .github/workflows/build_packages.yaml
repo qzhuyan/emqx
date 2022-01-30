@@ -291,15 +291,17 @@ jobs:
           - profile: emqx
             otp: 24.1.5-4
             elixir: 1.13.2
-            arch: amd64
             build_elixir: with_elixir
+            arch: amd64
             os: ubuntu20.04
+            build_machine: ubuntu-20.04
           - profile: emqx
             otp: 24.1.5-4
             elixir: 1.13.2
-            arch: amd64
             build_elixir: with_elixir
+            arch: amd64
             os: centos8
+            build_machine: aws-arm64
 
     defaults:
       run:
