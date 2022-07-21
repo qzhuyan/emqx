@@ -36,7 +36,7 @@ jobs:
           if make emqx-ee --dry-run > /dev/null 2>&1; then
             echo "::set-output name=profiles::[\"emqx-ee\"]"
           else
-            echo "::set-output name=profiles::[\"emqx\", \"emqx-edge\"]"
+            echo "::set-output name=profiles::[\"emqx\"]"
           fi
       - name: get_all_deps
         if: endsWith(github.repository, 'emqx')
@@ -58,7 +58,7 @@ jobs:
   windows:
     runs-on: windows-2019
     needs: prepare
-    if: endsWith(github.repository, 'emqx')
+    if: false #endsWith(github.repository, 'emqx')
     strategy:
       matrix:
         profile: ${{fromJSON(needs.prepare.outputs.profiles)}}
@@ -119,6 +119,7 @@ jobs:
         path: source/_packages/${{ matrix.profile }}/.
 
   mac:
+    if: false
     needs: prepare
 
     strategy:
@@ -214,17 +215,17 @@ jobs:
         profile: ${{fromJSON(needs.prepare.outputs.profiles)}}
         arch:
           - amd64
-          - arm64
+    #      - arm64
         os:
           - ubuntu20.04
-          - ubuntu18.04
-          - ubuntu16.04
-          - debian10
-          - debian9
-          # - opensuse
-          - centos8
-          - centos7
-          - centos6
+          # - ubuntu18.04
+          # - ubuntu16.04
+          # - debian10
+          # - debian9
+          # # - opensuse
+          # - centos8
+          # - centos7
+          # - centos6
           # - raspbian10 #armv6l is too slow to emulate
           # - raspbian9
         otp_version:
@@ -281,6 +282,7 @@ jobs:
           -f .ci/build_packages/Dockerfile \
           --build-arg BUILD_FROM=emqx/build-env:$ERL_OTP-$SYSTEM \
           --build-arg EMQX_NAME=$PROFILE \
+          --build-arg EMQX_RELUP=true \
           --output type=tar,dest=/tmp/cross-build-$PROFILE-for-$SYSTEM.tar .
 
         mkdir -p /tmp/packages/$PROFILE
@@ -317,6 +319,7 @@ jobs:
         path: /tmp/packages/${{ matrix.profile }}/.
 
   docker:
+    if: false
     runs-on: ubuntu-20.04
 
     needs: prepare
