@@ -293,6 +293,7 @@ jobs:
         docker rm -f $(docker ps -a -q)
         docker volume prune -f
     - name: create sha256
+      if: always()
       env:
         PROFILE: ${{ matrix.profile }}
         ERL_OTP: erl${{ matrix.otp_version }}
@@ -314,6 +315,7 @@ jobs:
           cd -
         fi
     - uses: actions/upload-artifact@v1
+      if: always()
       with:
         name: ${{ matrix.profile }}
         path: /tmp/packages/${{ matrix.profile }}/.
