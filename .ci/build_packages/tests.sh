@@ -146,7 +146,7 @@ relup_test(){
                 ./emqx/bin/emqx versions
                 cp "${PACKAGE_PATH}/${EMQX_NAME}"-*-"${TARGET_VERSION}-${ARCH}".zip ./emqx/releases
                 ./emqx/bin/emqx install "${TARGET_VERSION}"
-                [ "$(./emqx/bin/emqx versions |grep permanent | awk '{print $2}')" = "${TARGET_VERSION}" ] || exit 1
+                [ "$(bash -x ./emqx/bin/emqx versions |grep permanent | awk '{print $2}')" = "${TARGET_VERSION}" ] || exit 1
                 export EMQX_WAIT_FOR_STOP=300
                 ./emqx/bin/emqx_ctl status
                 if ! ./emqx/bin/emqx stop; then
