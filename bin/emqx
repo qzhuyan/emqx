@@ -42,14 +42,10 @@ assert_node_alive() {
 }
 
 check_erlang_start() {
-    ls -alt "$BINDIR/"
-    ls -alt $(dirname "$BINDIR/")
-    ls -alR /emqx/_upgrade_base
-    "$BINDIR/$PROGNAME" -boot "$REL_DIR/start_clean" -eval "halt()"
     "$BINDIR/$PROGNAME" -boot "$REL_DIR/start_clean" -eval "crypto:start(),halt()"
 }
 
-if ! check_erlang_start; then
+if ! check_erlang_start >/dev/null 2>&1; then
     BUILT_ON="$(head -1 "${REL_DIR}/BUILT_ON")"
     ## failed to start, might be due to missing libs, try to be portable
     export LD_LIBRARY_PATH="$DYNLIBS_DIR:$LD_LIBRARY_PATH"
