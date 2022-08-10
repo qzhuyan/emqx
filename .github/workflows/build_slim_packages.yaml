@@ -19,7 +19,7 @@ jobs:
           - aws-amd64
           - ubuntu-20.04
         use-self-hosted:
-          - ${{ github.repository_owner == 'emqx' }}
+          - ${{ github.repository_owner == 'emqx' || github.repository_owner == 'qzhuyan'}}
         exclude:
           - runs-on: ubuntu-20.04
             use-self-hosted: true
