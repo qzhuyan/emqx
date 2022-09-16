@@ -11,6 +11,10 @@ File format:
   Change log ends with a list of GitHub PRs
 
 ## v4.3.20
+### Enhancements
+- TLS listener memory usage optimization
+  sndbuf and recbuf defaults to 4KB
+  new option 'hibernate_after' to hibernate TLS process after idling
 
 ### Bug fixes
 
