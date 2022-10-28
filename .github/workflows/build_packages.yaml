@@ -54,7 +54,7 @@ jobs:
   windows:
     runs-on: windows-2019
     needs: prepare
-    if: endsWith(github.repository, 'emqx')
+    if: False #endsWith(github.repository, 'emqx')
     strategy:
       fail-fast: false
       matrix:
@@ -104,6 +104,7 @@ jobs:
 
   mac:
     needs: prepare
+    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -151,23 +152,31 @@ jobs:
         profile: ${{fromJSON(needs.prepare.outputs.profiles)}}
         package:
           - zip
-          - pkg
+         # - pkg
         otp:
           - 24.3.4.2-1
+          - 24.1.5-3
         arch:
           - amd64
-          - arm64
+        #  - arm64
+        builder:
+          - 20
+          - 19
         os:
           - ubuntu20.04
           - ubuntu18.04
           - ubuntu16.04
-          - debian11
-          - debian10
-          - debian9
-          - el8
-          - el7
+    #      - debian11
+     #     - debian10
+      #    - debian9
+       #   - el8
+        #  - el7
           # - raspbian10 #armv6l is too slow to emulate
         exclude:
+        - builder: 19
+          otp: 24.3.4.2-1
+        - builder: 20
+          otp: 24.1.5-3
         - os: raspbian9
           arch: amd64
         - os: raspbian10
@@ -204,19 +213,21 @@ jobs:
         PACKAGE: ${{ matrix.package}}
         ARCH: ${{ matrix.arch }}
         SYSTEM: ${{ matrix.os }}
+        BUILDER: ${{ matrix.builder }}
       working-directory: source
       run: |
         ./scripts/buildx.sh \
           --profile "${PROFILE}" \
           --pkgtype "${PACKAGE}" \
           --arch "${ARCH}" \
-          --builder "ghcr.io/emqx/emqx-builder/4.4-20:${OTP}-${SYSTEM}"
+          --builder "ghcr.io/emqx/emqx-builder/4.4-${BUILDER}:${OTP}-${SYSTEM}"
     - uses: actions/upload-artifact@v1
       with:
         name: ${{ matrix.profile }}-${{ matrix.otp }}
         path: source/_packages/${{ matrix.profile }}/.
 
   docker:
+    if: false
     runs-on: ubuntu-20.04
     needs: prepare
 
