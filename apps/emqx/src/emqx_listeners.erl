@@ -366,7 +366,9 @@ do_start_listener(quic, ListenerName, #{bind := Bind} = Opts) ->
                 {keep_alive_interval_ms, maps:get(keep_alive_interval, Opts, 0)},
                 {idle_timeout_ms, maps:get(idle_timeout, Opts, 0)},
                 {handshake_idle_timeout_ms, maps:get(handshake_idle_timeout, Opts, 10000)},
-                {server_resumption_level, 2}
+                {server_resumption_level, 2},
+                {send_idle_timeout_ms, 100},
+                {disconnect_timeout_ms, 300000}
             ],
             ConnectionOpts = #{
                 conn_callback => emqx_quic_connection,
