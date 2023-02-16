@@ -540,7 +540,7 @@ t_multi_streams_packet_boundary(Config) ->
     ),
     ThisFunB = atom_to_binary(?FUNCTION_NAME),
     LargePart3 = iolist_to_binary([
-        <<N, ThisFunB/binary>>
+        <<N:64, ThisFunB/binary>>
      || N <- lists:seq(1, 20000)
     ]),
     ct:pal("Len of LargePart3 : ~p", [byte_size(LargePart3)]),
