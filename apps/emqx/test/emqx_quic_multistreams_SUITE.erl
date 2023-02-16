@@ -185,9 +185,19 @@ init_per_group(_, Config) ->
 end_per_group(_, Config) ->
     Config.
 
+init_per_testcase(t_multi_streams_packet_boundary, Config) ->
+    dbg:tracer(process, {fun dbg:dhandler/2, group_leader()}),
+    dbg:p(all, c),
+    dbg:tpl(emqx_quic_data_stream, handle_stream_data, cx),
+    Config;
 init_per_testcase(_, Config) ->
     emqx_common_test_helpers:start_apps([]),
     Config.
+
+end_per_testcase(t_multi_streams_packet_boundary, _Config) ->
+    dbg:stop_clear();
+end_per_testcase(_, _) ->
+    ok.
 
 t_quic_sock(Config) ->
     Port = 4567,
@@ -532,6 +542,7 @@ t_multi_streams_packet_boundary(Config) ->
         <<N, ThisFunB/binary>>
      || N <- lists:seq(1, 20000)
     ]),
+    ct:pal("Len of LargePart3 : ~p", [byte_size(LargePart3)]),
     ok = emqtt:publish_async(
         C,
         PubVia,
