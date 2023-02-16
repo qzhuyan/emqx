@@ -188,7 +188,8 @@ end_per_group(_, Config) ->
 init_per_testcase(t_multi_streams_packet_boundary, Config) ->
     dbg:tracer(process, {fun dbg:dhandler/2, group_leader()}),
     dbg:p(all, c),
-    dbg:tpl(emqx_quic_data_stream, handle_stream_data, cx),
+    dbg:tpl(emqtt_quic_stream, handle_stream_data, cx),
+    dbg:tpl(emqx_quic_data_stream, handle_outgoing, cx),
     Config;
 init_per_testcase(_, Config) ->
     emqx_common_test_helpers:start_apps([]),
