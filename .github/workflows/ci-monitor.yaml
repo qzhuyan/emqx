@@ -1,0 +1,29 @@
+name: EMQX repo CI monitor
+
+on:
+  schedule:
+  - cron:  '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      branch:
+        default: master
+        required: false
+      limit:
+        default: 100
+        required: false
+jobs:
+  account_flaky_testcases:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: run script
+        run: |
+          python3 scripts/ci-find-flaky-test.py \
+            -r 'emqx/emqx' \
+            -l 100
+            -b ${{ inputs.branch }}
+            -l ${{ inputs.limit }}
+            -t ${{ secrets.GITHUB_TOKEN }}
