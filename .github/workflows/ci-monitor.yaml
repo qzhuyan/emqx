@@ -1,5 +1,5 @@
 name: EMQX repo CI monitor
-
+permissions: read-all
 on:
   push:
     branches:
@@ -21,8 +21,6 @@ env:
 
 jobs:
   account_flaky_testcases:
-    permissions:
-      actions: read
     runs-on: ubuntu-22.04
     steps:
       - name: checkout
