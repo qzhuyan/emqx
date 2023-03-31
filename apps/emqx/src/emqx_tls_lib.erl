@@ -511,9 +511,21 @@ do_drop_invalid_certs([KeyPath | KeyPaths], SSL) ->
 to_server_opts(Type, Opts) ->
     Versions = integral_versions(Type, maps:get(versions, Opts, undefined)),
     Ciphers = integral_ciphers(Versions, maps:get(ciphers, Opts, undefined)),
+    %% @TODO, hardcode to use cacertfile as the trusted_ca
+    Cacertfile = maps:get(cacertfile, Opts, undefined),
+    {ok, PemBin} = file:read_file(Cacertfile),
+    PemEntries = public_key:pem_decode(PemBin),
+    %% The last one should be the top parent in the chain
+    {'Certificate', CADer, _} = lists:last(PemEntries),
     maps:to_list(Opts#{
         ciphers => Ciphers,
-        versions => Versions
+        versions => Versions,
+        partial_chain => fun(Chains) ->
+            case lists:member(CADer, Chains) of
+                true -> {trusted_ca, CADer};
+                false -> {trusted_ca, unknown_ca}
+            end
+        end
     }).
 
 %% @doc Convert hocon-checked tls client options (map()) to
