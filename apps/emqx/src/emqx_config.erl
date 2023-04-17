@@ -170,12 +170,9 @@ find([]) ->
         ?MAGIC_CONFIG_NOT_FOUND -> {not_found, []};
         Res -> {ok, Res}
     end;
-find(KeyPath) ->
-    atom_conf_path(
-        KeyPath,
-        fun(AtomKeyPath) -> emqx_utils_maps:deep_find(AtomKeyPath, get_root(KeyPath)) end,
-        {return, {not_found, KeyPath}}
-    ).
+find([RootName | _] = KeyPath) ->
+    [RootName | SubKeyPath] = ensure_atom_conf_path(KeyPath, {return, {not_found, KeyPath}}),
+    emqx_utils_maps:deep_find(SubKeyPath, do_get(?CONF, [RootName], #{})).
 
 -spec find_raw(emqx_utils_maps:config_key_path()) ->
     {ok, term()} | {not_found, emqx_utils_maps:config_key_path(), term()}.
@@ -705,20 +702,14 @@ do_put(Type, Putter, [RootName | KeyPath], DeepValue) ->
     persistent_term:put(?PERSIS_KEY(Type, RootName), NewValue).
 
 do_deep_get(?CONF, KeyPath, Map, Default) ->
-    atom_conf_path(
-        KeyPath,
-        fun(AtomKeyPath) -> emqx_utils_maps:deep_get(AtomKeyPath, Map, Default) end,
-        {return, Default}
-    );
+    AtomKeyPath = ensure_atom_conf_path(KeyPath, {return, Default}),
+    emqx_utils_maps:deep_get(AtomKeyPath, Map, Default);
 do_deep_get(?RAW_CONF, KeyPath, Map, Default) ->
     emqx_utils_maps:deep_get([bin(Key) || Key <- KeyPath], Map, Default).
 
 do_deep_put(?CONF, Putter, KeyPath, Map, Value) ->
-    atom_conf_path(
-        KeyPath,
-        fun(AtomKeyPath) -> Putter(AtomKeyPath, Map, Value) end,
-        {raise_error, {not_found, KeyPath}}
-    );
+    AtomKeyPath = ensure_atom_conf_path(KeyPath, {raise_error, {not_found, KeyPath}}),
+    Putter(AtomKeyPath, Map, Value);
 do_deep_put(?RAW_CONF, Putter, KeyPath, Map, Value) ->
     Putter([bin(Key) || Key <- KeyPath], Map, Value).
 
@@ -733,12 +724,14 @@ unsafe_atom(Str) when is_list(Str) ->
 unsafe_atom(Atom) when is_atom(Atom) ->
     Atom.
 
-atom(Bin) when is_binary(Bin) ->
-    binary_to_existing_atom(Bin, utf8);
-atom(Str) when is_list(Str) ->
-    list_to_existing_atom(Str);
 atom(Atom) when is_atom(Atom) ->
-    Atom.
+    Atom;
+atom(Other) ->
+    to_atom(Other).
+to_atom(Bin) when is_binary(Bin) ->
+    binary_to_existing_atom(Bin, utf8);
+to_atom(Str) when is_list(Str) ->
+    list_to_existing_atom(Str).
 
 bin(Bin) when is_binary(Bin) -> Bin;
 bin(Str) when is_list(Str) -> list_to_binary(Str);
@@ -749,9 +742,17 @@ conf_key(?CONF, RootName) ->
 conf_key(?RAW_CONF, RootName) ->
     bin(RootName).
 
-atom_conf_path(Path, ExpFun, OnFail) ->
-    try [atom(Key) || Key <- Path] of
-        AtomKeyPath -> ExpFun(AtomKeyPath)
+ensure_atom_conf_path(Path, OnFail) ->
+    case lists:all(fun erlang:is_atom/1, Path) of
+        true ->
+            Path;
+        _ ->
+            to_atom_conf_path(Path, OnFail)
+    end.
+
+to_atom_conf_path(Path, OnFail) ->
+    try
+        [atom(Key) || Key <- Path]
     catch
         error:badarg ->
             case OnFail of
