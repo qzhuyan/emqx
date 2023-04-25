@@ -470,7 +470,8 @@ post_config_update(_Path, _Request, _NewConf, _OldConf, _AppEnvs) ->
 
 esockd_opts(ListenerId, Type, Opts0) ->
     Opts1 = maps:with([acceptors, max_connections, proxy_protocol, proxy_protocol_timeout], Opts0),
-    Limiter = limiter(Opts0),
+    %% Limiter = limiter(Opts0),
+    Limiter = #{},
     Opts2 =
         case maps:get(connection, Limiter, undefined) of
             undefined ->
