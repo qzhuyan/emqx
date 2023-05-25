@@ -586,7 +586,15 @@ save_to_app_env(AppEnvs0) ->
 -spec save_to_config_map(config(), raw_config()) -> ok.
 save_to_config_map(Conf, RawConf) ->
     ?MODULE:put(Conf),
-    lists:member(<<"zones">>, get_root_names()) andalso init_default_zone(),
+    try emqx_config:get([zones]) of
+        Zones when is_map(Zones) ->
+            init_default_zone()
+    catch
+        error:{config_not_found, [zones]} ->
+            %% emqx schema is not loaded.
+            %% note, don't trust get_root_names/0
+            skip
+    end,
     ?MODULE:put_raw(RawConf).
 
 -spec save_to_override_conf(boolean(), raw_config(), update_opts()) -> ok | {error, term()}.
