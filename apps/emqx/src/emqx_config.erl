@@ -788,6 +788,15 @@ to_atom_conf_path(Path, OnFail) ->
             end
     end.
 
+%% @doc Init zones under root `zones'
+%% 1. ensure one `default' zone as it is referenced by listeners.
+%%   if default zone is unset, clone all default values from `GlobalDefaults'
+%%   if default zone is set, values are merged with `GlobalDefaults'
+%% 2. For any user defined zones, merge with `GlobalDefaults'
+%%
+%% note1, this should be called as post action after emqx_config terms (zones, and GlobalDefaults)
+%%       are written in the PV storage during emqx config loading/initialization.
+-spec init_default_zone() -> ok.
 init_default_zone() ->
     Zones =
         case ?MODULE:get([zones], #{}) of
@@ -805,6 +814,8 @@ init_default_zone() ->
     ),
     ?MODULE:put([zones], NewZones).
 
+%% @TODO just use deep merge?
+-spec merge_with_global_defaults(map(), map()) -> map().
 merge_with_global_defaults(Val, Defaults) ->
     maps:fold(
         fun(K, V, Acc) ->
@@ -821,6 +832,8 @@ merge_with_global_defaults(Val, Defaults) ->
         Defaults
     ).
 
+%% @doc Update zones in case global defaults are changed.
+-spec maybe_update_zone(runtime_config_key_path(), Val :: term()) -> skip | ok.
 maybe_update_zone([], _Value) ->
     skip;
 maybe_update_zone([RootName | _T] = Path, Value) ->
@@ -831,6 +844,7 @@ maybe_update_zone([RootName | _T] = Path, Value) ->
             Zones = ?MODULE:get([zones], #{}),
             NewZones = maps:map(
                 fun(_ZoneName, ZoneVal) ->
+                    %% @TODO we should not overwrite if it is a user defined value
                     emqx_utils_maps:deep_put(Path, ZoneVal, Value)
                 end,
                 Zones
@@ -839,13 +853,6 @@ maybe_update_zone([RootName | _T] = Path, Value) ->
             ok
     end.
 
+-spec zone_roots() -> [atom()].
 zone_roots() ->
-    [
-        mqtt,
-        stats,
-        flapping_detect,
-        force_shutdown,
-        conn_congestion,
-        force_gc,
-        overload_protection
-    ].
+    lists:map(fun atom/1, emqx_zone_schema:roots()).
