@@ -490,6 +490,76 @@ t_other_zone_is_updated_after_global_defaults_updated(Config) ->
         emqx_config:get([zones, myzone, mqtt])
     ).
 
+t_zone_no_user_defined_overrites(Config) ->
+    emqx_config:erase_all(),
+    %% Given user defined non default mqtt schema in config file
+    ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"zones.myzone.mqtt.max_inflight=1">>, Config),
+    application:set_env(emqx, config_files, [ConfFile]),
+    ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
+    ?assertEqual(1, emqx_config:get([zones, myzone, mqtt, max_inflight])),
+    %% When there is an update in global default
+    emqx_config:put([mqtt, max_inflight], 2),
+    %% Then the value is reflected in default `zone' but not user-defined zone
+    ?assertMatch(2, emqx_config:get([zones, default, mqtt, max_inflight])),
+    ?assertMatch(1, emqx_config:get([zones, myzone, mqtt, max_inflight])).
+
+t_default_zone_no_user_defined_overrites(Config) ->
+    emqx_config:erase_all(),
+    %% Given default zone config in conf file.
+    ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"zones.default.mqtt.max_inflight=1">>, Config),
+    application:set_env(emqx, config_files, [ConfFile]),
+    ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
+    ?assertEqual(1, emqx_config:get([zones, default, mqtt, max_inflight])),
+    %% When there is an update in global default
+    emqx_config:put([mqtt, max_inflight], 2),
+    %% Then the value is not reflected in default `zone'
+    ?assertMatch(1, emqx_config:get([zones, default, mqtt, max_inflight])).
+
+t_zone_update_with_new_zone(Config) ->
+    emqx_config:erase_all(),
+    %% Given loaded an empty conf file
+    ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"">>, Config),
+    application:set_env(emqx, config_files, [ConfFile]),
+    ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
+    %% When there is an update for creating new zone config
+    ok = emqx_config:put([zones, myzone, mqtt, max_inflight], 2),
+    %% Then the value is set and other roots are created with defaults.
+    ?assertMatch(
+        #{
+            await_rel_timeout := 300000,
+            exclusive_subscription := false,
+            idle_timeout := 15000,
+            ignore_loop_deliver := false,
+            keepalive_backoff := 0.75,
+            keepalive_multiplier := 1.5,
+            max_awaiting_rel := 100,
+            max_clientid_len := 65535,
+            max_inflight := 2,
+            max_mqueue_len := 1000,
+            max_packet_size := 1048576,
+            max_qos_allowed := 2,
+            max_subscriptions := infinity,
+            max_topic_alias := 65535,
+            max_topic_levels := 128,
+            mqueue_default_priority := lowest,
+            mqueue_priorities := disabled,
+            mqueue_store_qos0 := true,
+            peer_cert_as_clientid := disabled,
+            peer_cert_as_username := disabled,
+            response_information := [],
+            retain_available := true,
+            retry_interval := 30000,
+            server_keepalive := disabled,
+            session_expiry_interval := 7200000,
+            shared_subscription := true,
+            strict_mode := false,
+            upgrade_qos := false,
+            use_username_as_clientid := false,
+            wildcard_subscription := true
+        },
+        emqx_config:get([zones, myzone, mqtt])
+    ).
+
 %%%
 %%% Helpers
 %%%
