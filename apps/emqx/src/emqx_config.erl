@@ -218,6 +218,9 @@ find_listener_conf(Type, Listener, KeyPath) ->
 
 -spec put(map()) -> ok.
 put(Config) ->
+    put_with_order(Config).
+
+put_1(Config) ->
     maps:fold(
         fun(RootName, RootValue, _) ->
             ?MODULE:put([atom(RootName)], RootValue)
@@ -584,7 +587,7 @@ save_to_app_env(AppEnvs0) ->
 
 -spec save_to_config_map(config(), raw_config()) -> ok.
 save_to_config_map(Conf, RawConf) ->
-    put_with_deps(Conf),
+    put(Conf),
     try emqx_config:get([zones]) of
         Zones when is_map(Zones) ->
             init_default_zone()
@@ -898,8 +901,8 @@ zone_roots() ->
 %%%
 %%% @doc During init, ensure order of puts that zone is put after the other global defaults.
 %%%
-put_with_deps(#{zones := _Zones} = Conf) ->
-    ?MODULE:put(maps:without([zones], Conf)),
-    ?MODULE:put(maps:with([zones], Conf));
-put_with_deps(Conf) ->
-    ?MODULE:put(Conf).
+put_with_order(#{zones := _Zones} = Conf) ->
+    put_1(maps:without([zones], Conf)),
+    put_1(maps:with([zones], Conf));
+put_with_order(Conf) ->
+    put_1(Conf).

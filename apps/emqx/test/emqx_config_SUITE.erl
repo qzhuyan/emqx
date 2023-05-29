@@ -107,6 +107,13 @@ t_init_load_emqx_schema(Config) ->
     ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
     %% Then default zone is injected with all global defaults
     Default = emqx_config:get([zones, default]),
+    MQTT = emqx_config:get([mqtt]),
+    Stats = emqx_config:get([stats]),
+    FD = emqx_config:get([flapping_detect]),
+    FS = emqx_config:get([force_shutdown]),
+    CC = emqx_config:get([conn_congestion]),
+    FG = emqx_config:get([force_gc]),
+    OP = emqx_config:get([overload_protection]),
     ?assertMatch(
         #{
             mqtt := MQTT,
@@ -116,13 +123,7 @@ t_init_load_emqx_schema(Config) ->
             conn_congestion := CC,
             force_gc := FG,
             overload_protection := OP
-        } when map_size(MQTT) > 0 andalso
-               map_size(Stats) > 0 andalso
-               map_size(FD) > 0 andalso
-               map_size(FS) > 0 andalso
-               map_size(CC) > 0 andalso
-               map_size(FG) > 0 andalso
-               map_size(OP) > 0,
+        },
         Default
     ).
 
@@ -131,7 +132,7 @@ t_init_zones_load_emqx_schema_no_default_for_none_existing(Config) ->
     %% Given empty config file
     ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"">>, Config),
     application:set_env(emqx, config_files, [ConfFile]),
-    %% When load emqx_schema
+    %% When emqx_schema is loaded
     ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
     %% Then read for none existing zone should throw error
     ?assertError(
@@ -144,9 +145,14 @@ t_init_zones_load_other_schema(Config) ->
     %% Given empty config file
     ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"">>, Config),
     application:set_env(emqx, config_files, [ConfFile]),
-    %% When load schema other than emqx_schema
+    %% When load emqx_limiter_schema, not emqx_schema
     %% Then load should success
     ?assertEqual(ok, emqx_config:init_load(emqx_limiter_schema)),
+    %% Then no zones is loaded.
+    ?assertError(
+        {config_not_found, [zones]},
+        emqx_config:get([zones])
+    ),
     %% Then no default zone is loaded.
     ?assertError(
         {config_not_found, [zones, default]},
@@ -160,70 +166,15 @@ t_init_zones_with_user_defined_default_zone(Config) ->
         ?FUNCTION_NAME, <<"zones.default.mqtt.max_topic_alias=1024">>, Config
     ),
     application:set_env(emqx, config_files, [ConfFile]),
-    %% When load schema
+    %% When schema is loaded
     ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
-    %% Then user defined value is set and others are defaults
 
-    ?assertMatch(
-        #{
-            conn_congestion :=
-                #{enable_alarm := true, min_alarm_sustain_duration := 60000},
-            flapping_detect :=
-                #{ban_time := 300000, max_count := 15, window_time := disabled},
-            force_gc :=
-                #{bytes := 16777216, count := 16000, enable := true},
-            force_shutdown :=
-                #{
-                    enable := true,
-                    max_heap_size := 4194304,
-                    max_mailbox_size := 1000
-                },
-            mqtt :=
-                #{
-                    await_rel_timeout := 300000,
-                    exclusive_subscription := false,
-                    idle_timeout := 15000,
-                    ignore_loop_deliver := false,
-                    keepalive_backoff := 0.75,
-                    keepalive_multiplier := 1.5,
-                    max_awaiting_rel := 100,
-                    max_clientid_len := 65535,
-                    max_inflight := 32,
-                    max_mqueue_len := 1000,
-                    max_packet_size := 1048576,
-                    max_qos_allowed := 2,
-                    max_subscriptions := infinity,
-                    %% <=== here!
-                    max_topic_alias := 1024,
-                    max_topic_levels := 128,
-                    mqueue_default_priority := lowest,
-                    mqueue_priorities := disabled,
-                    mqueue_store_qos0 := true,
-                    peer_cert_as_clientid := disabled,
-                    peer_cert_as_username := disabled,
-                    response_information := [],
-                    retain_available := true,
-                    retry_interval := 30000,
-                    server_keepalive := disabled,
-                    session_expiry_interval := 7200000,
-                    shared_subscription := true,
-                    strict_mode := false,
-                    upgrade_qos := false,
-                    use_username_as_clientid := false,
-                    wildcard_subscription := true
-                },
-            overload_protection :=
-                #{
-                    backoff_delay := 1,
-                    backoff_gc := false,
-                    backoff_hibernation := true,
-                    backoff_new_conn := true,
-                    enable := false
-                },
-            stats := #{enable := true}
-        },
-        emqx_config:get([zones, default])
-    ).
+    %% Then user defined value is set
+    {MqttV, Others} = maps:take(mqtt, emqx_config:get([zones, default])),
+    {ZGDMQTT, ExpectedOthers} = maps:take(mqtt, zone_global_defaults()),
+    ?assertEqual(ZGDMQTT#{max_topic_alias := 1024}, MqttV),
+    %% Then others are defaults
+    ?assertEqual(ExpectedOthers, Others).
 
 t_init_zones_with_user_defined_other_zone(Config) ->
     emqx_config:erase_all(),
@@ -232,273 +183,76 @@ t_init_zones_with_user_defined_other_zone(Config) ->
         ?FUNCTION_NAME, <<"zones.myzone.mqtt.max_topic_alias=1024">>, Config
     ),
     application:set_env(emqx, config_files, [ConfFile]),
-    %% When load schema
+    %% When schema is loaded
     ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
     %% Then user defined value is set and others are defaults
-    ?assertMatch(
-        #{
-            conn_congestion :=
-                #{enable_alarm := true, min_alarm_sustain_duration := 60000},
-            flapping_detect :=
-                #{ban_time := 300000, max_count := 15, window_time := disabled},
-            force_gc :=
-                #{bytes := 16777216, count := 16000, enable := true},
-            force_shutdown :=
-                #{
-                    enable := true,
-                    max_heap_size := 4194304,
-                    max_mailbox_size := 1000
-                },
-            mqtt :=
-                #{
-                    await_rel_timeout := 300000,
-                    exclusive_subscription := false,
-                    idle_timeout := 15000,
-                    ignore_loop_deliver := false,
-                    keepalive_backoff := 0.75,
-                    keepalive_multiplier := 1.5,
-                    max_awaiting_rel := 100,
-                    max_clientid_len := 65535,
-                    max_inflight := 32,
-                    max_mqueue_len := 1000,
-                    max_packet_size := 1048576,
-                    max_qos_allowed := 2,
-                    max_subscriptions := infinity,
-                    %% <=== here!
-                    max_topic_alias := 1024,
-                    max_topic_levels := 128,
-                    mqueue_default_priority := lowest,
-                    mqueue_priorities := disabled,
-                    mqueue_store_qos0 := true,
-                    peer_cert_as_clientid := disabled,
-                    peer_cert_as_username := disabled,
-                    response_information := [],
-                    retain_available := true,
-                    retry_interval := 30000,
-                    server_keepalive := disabled,
-                    session_expiry_interval := 7200000,
-                    shared_subscription := true,
-                    strict_mode := false,
-                    upgrade_qos := false,
-                    use_username_as_clientid := false,
-                    wildcard_subscription := true
-                },
-            overload_protection :=
-                #{
-                    backoff_delay := 1,
-                    backoff_gc := false,
-                    backoff_hibernation := true,
-                    backoff_new_conn := true,
-                    enable := false
-                },
-            stats := #{enable := true}
-        },
-        emqx_config:get([zones, myzone])
-    ),
 
+    %% Then user defined value is set
+    {MqttV, Others} = maps:take(mqtt, emqx_config:get([zones, myzone])),
+    {ZGDMQTT, ExpectedOthers} = maps:take(mqtt, zone_global_defaults()),
+    ?assertEqual(ZGDMQTT#{max_topic_alias := 1024}, MqttV),
+    %% Then others are defaults
+    ?assertEqual(ExpectedOthers, Others),
     %% Then default zone still have the defaults
-    ?assertMatch(
-        #{
-            conn_congestion :=
-                #{enable_alarm := true, min_alarm_sustain_duration := 60000},
-            flapping_detect :=
-                #{ban_time := 300000, max_count := 15, window_time := disabled},
-            force_gc :=
-                #{bytes := 16777216, count := 16000, enable := true},
-            force_shutdown :=
-                #{
-                    enable := true,
-                    max_heap_size := 4194304,
-                    max_mailbox_size := 1000
-                },
-            mqtt :=
-                #{
-                    await_rel_timeout := 300000,
-                    exclusive_subscription := false,
-                    idle_timeout := 15000,
-                    ignore_loop_deliver := false,
-                    keepalive_backoff := 0.75,
-                    keepalive_multiplier := 1.5,
-                    max_awaiting_rel := 100,
-                    max_clientid_len := 65535,
-                    max_inflight := 32,
-                    max_mqueue_len := 1000,
-                    max_packet_size := 1048576,
-                    max_qos_allowed := 2,
-                    max_subscriptions := infinity,
-                    max_topic_alias := 65535,
-                    max_topic_levels := 128,
-                    mqueue_default_priority := lowest,
-                    mqueue_priorities := disabled,
-                    mqueue_store_qos0 := true,
-                    peer_cert_as_clientid := disabled,
-                    peer_cert_as_username := disabled,
-                    response_information := [],
-                    retain_available := true,
-                    retry_interval := 30000,
-                    server_keepalive := disabled,
-                    session_expiry_interval := 7200000,
-                    shared_subscription := true,
-                    strict_mode := false,
-                    upgrade_qos := false,
-                    use_username_as_clientid := false,
-                    wildcard_subscription := true
-                },
-            overload_protection :=
-                #{
-                    backoff_delay := 1,
-                    backoff_gc := false,
-                    backoff_hibernation := true,
-                    backoff_new_conn := true,
-                    enable := false
-                },
-            stats := #{enable := true}
-        },
-        emqx_config:get([zones, default])
-    ).
+    ?assertEqual(zone_global_defaults(), emqx_config:get([zones, default])).
 
 t_init_zones_with_cust_root_mqtt(Config) ->
     emqx_config:erase_all(),
-    %% Given user defined non default mqtt schema in config file
+    %% Given config file with mqtt user overrides
     ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"mqtt.retry_interval=600000">>, Config),
     application:set_env(emqx, config_files, [ConfFile]),
     %% When emqx_schema is loaded
     ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
     %% Then the value is reflected in default `zone' and other fields under mqtt are default.
-    ?assertMatch(
-        #{
-            await_rel_timeout := 300000,
-            exclusive_subscription := false,
-            idle_timeout := 15000,
-            ignore_loop_deliver := false,
-            keepalive_backoff := 0.75,
-            keepalive_multiplier := 1.5,
-            max_awaiting_rel := 100,
-            max_clientid_len := 65535,
-            max_inflight := 32,
-            max_mqueue_len := 1000,
-            max_packet_size := 1048576,
-            max_qos_allowed := 2,
-            max_subscriptions := infinity,
-            max_topic_alias := 65535,
-            max_topic_levels := 128,
-            mqueue_default_priority := lowest,
-            mqueue_priorities := disabled,
-            mqueue_store_qos0 := true,
-            peer_cert_as_clientid := disabled,
-            peer_cert_as_username := disabled,
-            response_information := [],
-            retain_available := true,
-            %% <=== here
-            retry_interval := 600000,
-            server_keepalive := disabled,
-            session_expiry_interval := 7200000,
-            shared_subscription := true,
-            strict_mode := false,
-            upgrade_qos := false,
-            use_username_as_clientid := false,
-            wildcard_subscription := true
-        },
+    GDefaultMqtt = maps:get(mqtt, zone_global_defaults()),
+    ?assertEqual(
+        GDefaultMqtt#{retry_interval := 600000},
         emqx_config:get([zones, default, mqtt])
     ).
 
 t_default_zone_is_updated_after_global_defaults_updated(Config) ->
     emqx_config:erase_all(),
-    %% Given user defined non default mqtt schema in config file
+    %% Given empty emqx conf
     ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"">>, Config),
     application:set_env(emqx, config_files, [ConfFile]),
     ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
     ?assertNotEqual(900000, emqx_config:get([zones, default, mqtt, retry_interval])),
     %% When emqx_schema is loaded
     emqx_config:put([mqtt, retry_interval], 900000),
-    %% Then the value is reflected in default `zone' and other fields under mqtt are default.
-    ?assertMatch(
-        #{
-            await_rel_timeout := 300000,
-            exclusive_subscription := false,
-            idle_timeout := 15000,
-            ignore_loop_deliver := false,
-            keepalive_backoff := 0.75,
-            keepalive_multiplier := 1.5,
-            max_awaiting_rel := 100,
-            max_clientid_len := 65535,
-            max_inflight := 32,
-            max_mqueue_len := 1000,
-            max_packet_size := 1048576,
-            max_qos_allowed := 2,
-            max_subscriptions := infinity,
-            max_topic_alias := 65535,
-            max_topic_levels := 128,
-            mqueue_default_priority := lowest,
-            mqueue_priorities := disabled,
-            mqueue_store_qos0 := true,
-            peer_cert_as_clientid := disabled,
-            peer_cert_as_username := disabled,
-            response_information := [],
-            retain_available := true,
-            %% <=== here
-            retry_interval := 900000,
-            server_keepalive := disabled,
-            session_expiry_interval := 7200000,
-            shared_subscription := true,
-            strict_mode := false,
-            upgrade_qos := false,
-            use_username_as_clientid := false,
-            wildcard_subscription := true
-        },
+    %% Then the value is reflected in default `zone' and other fields under mqtt are defaults.
+    GDefaultMqtt = maps:get(mqtt, zone_global_defaults()),
+    ?assertEqual(
+        GDefaultMqtt#{retry_interval := 900000},
         emqx_config:get([zones, default, mqtt])
     ).
 
-t_other_zone_is_updated_after_global_defaults_updated(Config) ->
+t_myzone_is_updated_after_global_defaults_updated(Config) ->
     emqx_config:erase_all(),
-    %% Given user defined non default mqtt schema in config file
+    %% Given emqx conf file 3with user override in myzone (none default zone)
     ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"zones.myzone.mqtt.max_inflight=32">>, Config),
     application:set_env(emqx, config_files, [ConfFile]),
     ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
     ?assertNotEqual(900000, emqx_config:get([zones, myzone, mqtt, retry_interval])),
     %% When emqx_schema is loaded
     emqx_config:put([mqtt, retry_interval], 900000),
-    %% Then the value is reflected in default `zone' and other fields under mqtt are default.
-    ?assertMatch(
-        #{
-            await_rel_timeout := 300000,
-            exclusive_subscription := false,
-            idle_timeout := 15000,
-            ignore_loop_deliver := false,
-            keepalive_backoff := 0.75,
-            keepalive_multiplier := 1.5,
-            max_awaiting_rel := 100,
-            max_clientid_len := 65535,
-            max_inflight := 32,
-            max_mqueue_len := 1000,
-            max_packet_size := 1048576,
-            max_qos_allowed := 2,
-            max_subscriptions := infinity,
-            max_topic_alias := 65535,
-            max_topic_levels := 128,
-            mqueue_default_priority := lowest,
-            mqueue_priorities := disabled,
-            mqueue_store_qos0 := true,
-            peer_cert_as_clientid := disabled,
-            peer_cert_as_username := disabled,
-            response_information := [],
-            retain_available := true,
-            %% <=== here
+    %% Then the value is reflected in myzone and other fields under mqtt are default.
+    GDefaultMqtt = maps:get(mqtt, zone_global_defaults()),
+    ?assertEqual(
+        GDefaultMqtt#{
             retry_interval := 900000,
-            server_keepalive := disabled,
-            session_expiry_interval := 7200000,
-            shared_subscription := true,
-            strict_mode := false,
-            upgrade_qos := false,
-            use_username_as_clientid := false,
-            wildcard_subscription := true
+            max_inflight := 32
         },
         emqx_config:get([zones, myzone, mqtt])
+    ),
+    %% Then the value is reflected in default zone as well.
+    ?assertEqual(
+        GDefaultMqtt#{retry_interval := 900000},
+        emqx_config:get([zones, default, mqtt])
     ).
 
 t_zone_no_user_defined_overrites(Config) ->
     emqx_config:erase_all(),
-    %% Given user defined non default mqtt schema in config file
+    %% Given emqx conf file with user specified myzone
     ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"zones.myzone.mqtt.max_inflight=1">>, Config),
     application:set_env(emqx, config_files, [ConfFile]),
     ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
@@ -509,7 +263,7 @@ t_zone_no_user_defined_overrites(Config) ->
     ?assertMatch(2, emqx_config:get([zones, default, mqtt, max_inflight])),
     ?assertMatch(1, emqx_config:get([zones, myzone, mqtt, max_inflight])).
 
-t_default_zone_no_user_defined_overrites(Config) ->
+t_update_global_defaults_no_updates_on_user_overrides(Config) ->
     emqx_config:erase_all(),
     %% Given default zone config in conf file.
     ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"zones.default.mqtt.max_inflight=1">>, Config),
@@ -517,7 +271,7 @@ t_default_zone_no_user_defined_overrites(Config) ->
     ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
     ?assertEqual(1, emqx_config:get([zones, default, mqtt, max_inflight])),
     %% When there is an update in global default
-    emqx_config:put([mqtt, max_inflight], 2),
+    emqx_config:put([mqtt, max_inflight], 20),
     %% Then the value is not reflected in default `zone'
     ?assertMatch(1, emqx_config:get([zones, default, mqtt, max_inflight])).
 
@@ -530,41 +284,32 @@ t_zone_update_with_new_zone(Config) ->
     %% When there is an update for creating new zone config
     ok = emqx_config:put([zones, myzone, mqtt, max_inflight], 2),
     %% Then the value is set and other roots are created with defaults.
-    ?assertMatch(
-        #{
-            await_rel_timeout := 300000,
-            exclusive_subscription := false,
-            idle_timeout := 15000,
-            ignore_loop_deliver := false,
-            keepalive_backoff := 0.75,
-            keepalive_multiplier := 1.5,
-            max_awaiting_rel := 100,
-            max_clientid_len := 65535,
-            max_inflight := 2,
-            max_mqueue_len := 1000,
-            max_packet_size := 1048576,
-            max_qos_allowed := 2,
-            max_subscriptions := infinity,
-            max_topic_alias := 65535,
-            max_topic_levels := 128,
-            mqueue_default_priority := lowest,
-            mqueue_priorities := disabled,
-            mqueue_store_qos0 := true,
-            peer_cert_as_clientid := disabled,
-            peer_cert_as_username := disabled,
-            response_information := [],
-            retain_available := true,
-            retry_interval := 30000,
-            server_keepalive := disabled,
-            session_expiry_interval := 7200000,
-            shared_subscription := true,
-            strict_mode := false,
-            upgrade_qos := false,
-            use_username_as_clientid := false,
-            wildcard_subscription := true
-        },
+    GDefaultMqtt = maps:get(mqtt, zone_global_defaults()),
+    ?assertEqual(
+        GDefaultMqtt#{max_inflight := 2},
         emqx_config:get([zones, myzone, mqtt])
     ).
+
+t_init_zone_with_global_defaults(_Config) ->
+    %% Given uninitialized empty config
+    emqx_config:erase_all(),
+    Zones = #{myzone => #{mqtt => #{max_inflight => 3}}},
+    %% when put zones with global default with emqx_config:put/1
+    dbg:tracer(process, {fun dbg:dhandler/2, group_leader()}),
+    dbg:p(all, c),
+    dbg:tp(emqx_config, cx),
+    GlobalDefaults = zone_global_defaults(),
+    AllConf = maps:put(zones, Zones, GlobalDefaults),
+    %% Then put sucess
+    ?assertEqual(ok, emqx_config:put(AllConf)),
+    %% Then GlobalDefaults are set
+    ?assertEqual(GlobalDefaults, maps:with(maps:keys(GlobalDefaults), emqx_config:get([]))),
+    %% Then my zone and default zone are set
+    {MqttV, Others} = maps:take(mqtt, emqx_config:get([zones, myzone])),
+    {ZGDMQTT, ExpectedOthers} = maps:take(mqtt, GlobalDefaults),
+    ?assertEqual(ZGDMQTT#{max_inflight := 3}, MqttV),
+    %% Then others are defaults
+    ?assertEqual(ExpectedOthers, Others).
 
 %%%
 %%% Helpers
@@ -578,3 +323,61 @@ prepare_conf_file(Name, Content, CTConfig) ->
 tc_conf_file(TC, Config) ->
     DataDir = ?config(data_dir, Config),
     filename:join([DataDir, TC, 'emqx.conf']).
+
+zone_global_defaults() ->
+    #{
+        conn_congestion =>
+            #{enable_alarm => true, min_alarm_sustain_duration => 60000},
+        flapping_detect =>
+            #{ban_time => 300000, max_count => 15, window_time => disabled},
+        force_gc =>
+            #{bytes => 16777216, count => 16000, enable => true},
+        force_shutdown =>
+            #{
+                enable => true,
+                max_heap_size => 4194304,
+                max_mailbox_size => 1000
+            },
+        mqtt =>
+            #{
+                await_rel_timeout => 300000,
+                exclusive_subscription => false,
+                idle_timeout => 15000,
+                ignore_loop_deliver => false,
+                keepalive_backoff => 0.75,
+                keepalive_multiplier => 1.5,
+                max_awaiting_rel => 100,
+                max_clientid_len => 65535,
+                max_inflight => 32,
+                max_mqueue_len => 1000,
+                max_packet_size => 1048576,
+                max_qos_allowed => 2,
+                max_subscriptions => infinity,
+                max_topic_alias => 65535,
+                max_topic_levels => 128,
+                mqueue_default_priority => lowest,
+                mqueue_priorities => disabled,
+                mqueue_store_qos0 => true,
+                peer_cert_as_clientid => disabled,
+                peer_cert_as_username => disabled,
+                response_information => [],
+                retain_available => true,
+                retry_interval => 30000,
+                server_keepalive => disabled,
+                session_expiry_interval => 7200000,
+                shared_subscription => true,
+                strict_mode => false,
+                upgrade_qos => false,
+                use_username_as_clientid => false,
+                wildcard_subscription => true
+            },
+        overload_protection =>
+            #{
+                backoff_delay => 1,
+                backoff_gc => false,
+                backoff_hibernation => true,
+                backoff_new_conn => true,
+                enable => false
+            },
+        stats => #{enable => true}
+    }.
