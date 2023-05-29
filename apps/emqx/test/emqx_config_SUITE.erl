@@ -109,18 +109,24 @@ t_init_load_emqx_schema(Config) ->
     Default = emqx_config:get([zones, default]),
     ?assertMatch(
         #{
-            mqtt := _,
-            stats := _,
-            flapping_detect := _,
-            force_shutdown := _,
-            conn_congestion := _,
-            force_gc := _,
-            overload_protection := _
-        },
+            mqtt := MQTT,
+            stats := Stats,
+            flapping_detect := FD,
+            force_shutdown := FS,
+            conn_congestion := CC,
+            force_gc := FG,
+            overload_protection := OP
+        } when map_size(MQTT) > 0 andalso
+               map_size(Stats) > 0 andalso
+               map_size(FD) > 0 andalso
+               map_size(FS) > 0 andalso
+               map_size(CC) > 0 andalso
+               map_size(FG) > 0 andalso
+               map_size(OP) > 0,
         Default
     ).
 
-t_init_zones_load_emqx_schema_no_default(Config) ->
+t_init_zones_load_emqx_schema_no_default_for_none_existing(Config) ->
     emqx_config:erase_all(),
     %% Given empty config file
     ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"">>, Config),
