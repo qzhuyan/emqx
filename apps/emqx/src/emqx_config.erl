@@ -584,7 +584,7 @@ save_to_app_env(AppEnvs0) ->
 
 -spec save_to_config_map(config(), raw_config()) -> ok.
 save_to_config_map(Conf, RawConf) ->
-    ?MODULE:put(Conf),
+    put_with_deps(Conf),
     try emqx_config:get([zones]) of
         Zones when is_map(Zones) ->
             init_default_zone()
@@ -894,3 +894,12 @@ maybe_update_zone([RootName | T] = Path, RootValue, Value) when is_atom(RootName
 -spec zone_roots() -> [atom()].
 zone_roots() ->
     lists:map(fun list_to_atom/1, emqx_zone_schema:roots()).
+
+%%%
+%%% @doc During init, ensure order of puts that zone is put after the other global defaults.
+%%%
+put_with_deps(#{zones := _Zones} = Conf) ->
+    ?MODULE:put(maps:without([zones], Conf)),
+    ?MODULE:put(maps:with([zones], Conf));
+put_with_deps(Conf) ->
+    ?MODULE:put(Conf).
