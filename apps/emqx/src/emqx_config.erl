@@ -586,15 +586,12 @@ save_to_app_env(AppEnvs0) ->
 
 -spec save_to_config_map(config(), raw_config()) -> ok.
 save_to_config_map(Conf, RawConf) ->
-    put(Conf),
-    try emqx_config:get([zones]) of
+    ?MODULE:put(Conf),
+    case emqx_config:get([zones], ?CONFIG_NOT_FOUND_MAGIC) of
+        ?CONFIG_NOT_FOUND_MAGIC ->
+            skip;
         Zones when is_map(Zones) ->
             init_default_zone()
-    catch
-        error:{config_not_found, [zones]} ->
-            %% emqx schema is not loaded.
-            %% note, don't trust get_root_names/0
-            skip
     end,
     ?MODULE:put_raw(RawConf).
 
@@ -833,7 +830,7 @@ maybe_update_zone([zones | T], ZonesValue, Value) ->
             %% No new zones, skip
             NewZonesValue;
         NewZoneNames ->
-            %% We have new zones, update them with zone global defaultss
+            %% We have new zones, update them with zone global defaults
             maps:fold(
                 fun(ZoneName, ZoneValue, Acc) ->
                     Acc#{ZoneName := merge_with_global_defaults(ZoneValue)}
