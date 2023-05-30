@@ -295,9 +295,6 @@ t_init_zone_with_global_defaults(_Config) ->
     emqx_config:erase_all(),
     Zones = #{myzone => #{mqtt => #{max_inflight => 3}}},
     %% when put zones with global default with emqx_config:put/1
-    dbg:tracer(process, {fun dbg:dhandler/2, group_leader()}),
-    dbg:p(all, c),
-    dbg:tp(emqx_config, cx),
     GlobalDefaults = zone_global_defaults(),
     AllConf = maps:put(zones, Zones, GlobalDefaults),
     %% Then put sucess
