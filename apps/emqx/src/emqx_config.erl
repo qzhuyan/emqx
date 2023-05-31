@@ -782,15 +782,6 @@ to_atom_conf_path(Path, OnFail) ->
             end
     end.
 
--spec maybe_init_default_zone() -> skip | ok.
-maybe_init_default_zone() ->
-    case emqx_config:get([zones], ?CONFIG_NOT_FOUND_MAGIC) of
-        ?CONFIG_NOT_FOUND_MAGIC ->
-            skip;
-        Zones when is_map(Zones) ->
-            init_default_zone()
-    end.
-
 %% @doc Init zones under root `zones'
 %% 1. ensure one `default' zone as it is referenced by listeners.
 %%   if default zone is unset, clone all default values from `GlobalDefaults'
@@ -799,26 +790,32 @@ maybe_init_default_zone() ->
 %%
 %% note1, this should be called as post action after emqx_config terms (zones, and GlobalDefaults)
 %%       are written in the PV storage during emqx config loading/initialization.
--spec init_default_zone() -> ok.
-init_default_zone() ->
-    Zones =
-        case ?MODULE:get([zones], #{}) of
-            #{default := _DefaultZone} = Z1 ->
-                Z1;
-            Z2 ->
-                Z2#{default => #{}}
-        end,
-    NewZones = maps:map(
-        fun(_ZoneName, ZoneVal) ->
-            merge_with_global_defaults(ZoneVal)
-        end,
-        Zones
-    ),
-    ?MODULE:put([zones], NewZones).
+-spec maybe_init_default_zone() -> skip | ok.
+maybe_init_default_zone() ->
+    case emqx_config:get([zones], ?CONFIG_NOT_FOUND_MAGIC) of
+        ?CONFIG_NOT_FOUND_MAGIC ->
+            skip;
+        Zones0 when is_map(Zones0) ->
+            Zones =
+                case Zones0 of
+                    #{default := _DefaultZone} = Z1 ->
+                        Z1;
+                    Z2 ->
+                        Z2#{default => #{}}
+                end,
+            GLD = zone_global_defaults(),
+            NewZones = maps:map(
+                fun(_ZoneName, ZoneVal) ->
+                    merge_with_global_defaults(GLD, ZoneVal)
+                end,
+                Zones
+            ),
+            ?MODULE:put([zones], NewZones)
+    end.
 
--spec merge_with_global_defaults(map()) -> map().
-merge_with_global_defaults(ZoneVal) ->
-    emqx_utils_maps:deep_merge(zone_global_defaults(), ZoneVal).
+-spec merge_with_global_defaults(map(), map()) -> map().
+merge_with_global_defaults(GlobalDefaults, ZoneVal) ->
+    emqx_utils_maps:deep_merge(GlobalDefaults, ZoneVal).
 
 %% @doc Update zones
 %%    when 1) zone updates, return *new* zones
@@ -830,20 +827,15 @@ maybe_update_zone([zones | T], ZonesValue, Value) ->
     %% note, do not write to PT, return *New value* instead
     NewZonesValue = emqx_utils_maps:deep_put(T, ZonesValue, Value),
     ExistingZoneNames = maps:keys(?MODULE:get([zones], #{})),
-    case maps:keys(NewZonesValue) -- ExistingZoneNames of
-        [] ->
-            %% No new zones, skip
-            NewZonesValue;
-        NewZoneNames ->
-            %% We have new zones, update them with zone global defaults
-            maps:fold(
-                fun(ZoneName, ZoneValue, Acc) ->
-                    Acc#{ZoneName := merge_with_global_defaults(ZoneValue)}
-                end,
-                NewZonesValue,
-                maps:with(NewZoneNames, NewZonesValue)
-            )
-    end;
+    %% Update only new zones with global defaults
+    GLD = zone_global_defaults(),
+    maps:fold(
+        fun(ZoneName, ZoneValue, Acc) ->
+            Acc#{ZoneName := merge_with_global_defaults(GLD, ZoneValue)}
+        end,
+        NewZonesValue,
+        maps:without(ExistingZoneNames, NewZonesValue)
+    );
 maybe_update_zone([RootName | T], RootValue, Value) when is_atom(RootName) ->
     NewRootValue = emqx_utils_maps:deep_put(T, RootValue, Value),
     case is_zone_root(RootName) of
