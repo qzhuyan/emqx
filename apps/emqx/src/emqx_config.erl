@@ -330,7 +330,9 @@ init_load(SchemaMod, Conf) when is_list(Conf) orelse is_binary(Conf) ->
     %% check configs against the schema
     {AppEnvs, CheckedConf} = check_config(SchemaMod, RawConf, #{}),
     save_to_app_env(AppEnvs),
-    ok = save_to_config_map(CheckedConf, RawConf).
+    ok = save_to_config_map(CheckedConf, RawConf),
+    maybe_init_default_zone(),
+    ok.
 
 %% Merge environment variable overrides on top, then merge with overrides.
 overlay_v0(SchemaMod, RawConf) when is_map(RawConf) ->
@@ -587,12 +589,6 @@ save_to_app_env(AppEnvs0) ->
 -spec save_to_config_map(config(), raw_config()) -> ok.
 save_to_config_map(Conf, RawConf) ->
     ?MODULE:put(Conf),
-    case emqx_config:get([zones], ?CONFIG_NOT_FOUND_MAGIC) of
-        ?CONFIG_NOT_FOUND_MAGIC ->
-            skip;
-        Zones when is_map(Zones) ->
-            init_default_zone()
-    end,
     ?MODULE:put_raw(RawConf).
 
 -spec save_to_override_conf(boolean(), raw_config(), update_opts()) -> ok | {error, term()}.
@@ -784,6 +780,15 @@ to_atom_conf_path(Path, OnFail) ->
                 {return, V} ->
                     V
             end
+    end.
+
+-spec maybe_init_default_zone() -> skip | ok.
+maybe_init_default_zone() ->
+    case emqx_config:get([zones], ?CONFIG_NOT_FOUND_MAGIC) of
+        ?CONFIG_NOT_FOUND_MAGIC ->
+            skip;
+        Zones when is_map(Zones) ->
+            init_default_zone()
     end.
 
 %% @doc Init zones under root `zones'
