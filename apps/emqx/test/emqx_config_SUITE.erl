@@ -199,11 +199,12 @@ t_init_zones_with_user_defined_other_zone(Config) ->
 t_init_zones_with_cust_root_mqtt(Config) ->
     emqx_config:erase_all(),
     %% Given config file with mqtt user overrides
-    ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"mqtt.retry_interval=600000">>, Config),
+    ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"mqtt.retry_interval=10m">>, Config),
     application:set_env(emqx, config_files, [ConfFile]),
     %% When emqx_schema is loaded
     ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
-    %% Then the value is reflected in default `zone' and other fields under mqtt are default.
+    %% Then the value is reflected as internal representation in default `zone'
+    %% and other fields under mqtt are defaults.
     GDefaultMqtt = maps:get(mqtt, zone_global_defaults()),
     ?assertEqual(
         GDefaultMqtt#{retry_interval := 600000},
@@ -250,7 +251,24 @@ t_myzone_is_updated_after_global_defaults_updated(Config) ->
         emqx_config:get([zones, default, mqtt])
     ).
 
-t_zone_no_user_defined_overrites(Config) ->
+t_zone_no_user_defined_overrides(Config) ->
+    emqx_config:erase_all(),
+    %% Given emqx conf file with user specified myzone
+    ConfFile = prepare_conf_file(
+        ?FUNCTION_NAME, <<"zones.myzone.mqtt.retry_interval=10m">>, Config
+    ),
+    application:set_env(emqx, config_files, [ConfFile]),
+    ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
+    ?assertEqual(600000, emqx_config:get([zones, myzone, mqtt, retry_interval])),
+    %% When there is an update in global default
+    emqx_config:put([mqtt, max_inflight], 2),
+    %% Then the value is reflected in both default and myzone
+    ?assertMatch(2, emqx_config:get([zones, default, mqtt, max_inflight])),
+    ?assertMatch(2, emqx_config:get([zones, myzone, mqtt, max_inflight])),
+    %% Then user defined value from config is not overwritten
+    ?assertMatch(600000, emqx_config:get([zones, myzone, mqtt, retry_interval])).
+
+t_zone_no_user_defined_overrides_internal_represent(Config) ->
     emqx_config:erase_all(),
     %% Given emqx conf file with user specified myzone
     ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"zones.myzone.mqtt.max_inflight=1">>, Config),

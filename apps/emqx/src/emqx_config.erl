@@ -861,11 +861,14 @@ maybe_update_zone([RootName | T], RootValue, Value) when is_atom(RootName) ->
                         ?CONFIG_NOT_FOUND_MAGIC ->
                             ZoneVal#{RootName => NewRootValue};
                         RawUserZoneRoot ->
+                            UserDefinedValues = rawconf_to_conf(
+                                emqx_schema, BinPath, RawUserZoneRoot
+                            ),
                             ZoneVal#{
                                 RootName :=
                                     emqx_utils_maps:deep_merge(
                                         NewRootValue,
-                                        emqx_utils_maps:unsafe_atom_key_map(RawUserZoneRoot)
+                                        UserDefinedValues
                                     )
                             }
                     end
@@ -895,3 +898,16 @@ put_with_order(#{zones := _Zones} = Conf) ->
     put1(maps:with([zones], Conf));
 put_with_order(Conf) ->
     put1(Conf).
+
+%%
+%% @doc Helper function that converts raw conf val to runtime conf val
+%%      with the types info from schema module
+-spec rawconf_to_conf(module(), RawPath :: [binary()], RawValue :: term()) -> term().
+rawconf_to_conf(SchemaModule, RawPath, RawValue) ->
+    {_, RawUserDefinedValues} =
+        check_config(
+            SchemaModule,
+            emqx_utils_maps:deep_put(RawPath, #{}, RawValue)
+        ),
+    AtomPath = to_atom_conf_path(RawPath, {raise_error, maybe_update_zone_error}),
+    emqx_utils_maps:deep_get(AtomPath, RawUserDefinedValues).
