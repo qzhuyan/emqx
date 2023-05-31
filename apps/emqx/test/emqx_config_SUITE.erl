@@ -229,14 +229,14 @@ t_default_zone_is_updated_after_global_defaults_updated(Config) ->
 
 t_myzone_is_updated_after_global_defaults_updated(Config) ->
     emqx_config:erase_all(),
-    %% Given emqx conf file 3with user override in myzone (none default zone)
+    %% Given emqx conf file with user override in myzone (none default zone)
     ConfFile = prepare_conf_file(?FUNCTION_NAME, <<"zones.myzone.mqtt.max_inflight=32">>, Config),
     application:set_env(emqx, config_files, [ConfFile]),
     ?assertEqual(ok, emqx_config:init_load(emqx_schema)),
     ?assertNotEqual(900000, emqx_config:get([zones, myzone, mqtt, retry_interval])),
-    %% When emqx_schema is loaded
+    %% When update another value of global default
     emqx_config:put([mqtt, retry_interval], 900000),
-    %% Then the value is reflected in myzone and other fields under mqtt are default.
+    %% Then the value is reflected in myzone and the user defined value unchanged.
     GDefaultMqtt = maps:get(mqtt, zone_global_defaults()),
     ?assertEqual(
         GDefaultMqtt#{
