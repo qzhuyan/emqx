@@ -75,6 +75,7 @@
 -endif.
 
 -define(BROKER, ?MODULE).
+-define(TOPIC_NAME_CACHE, '__CACHE__TOPIC_NAME__').
 
 %% ETS tables for PubSub
 -define(SUBOPTION, emqx_suboption).
@@ -97,7 +98,8 @@ start_link(Pool, Id) ->
 -spec(create_tabs() -> ok).
 create_tabs() ->
     TabOpts = [public, {read_concurrency, true}, {write_concurrency, true}],
-
+    %% TopicNameCache: {Topic} -> {Topic}
+    ok = emqx_tables:new(?TOPIC_NAME_CACHE, [ordered_set | TabOpts]),
     %% SubOption: {SubPid, Topic} -> SubOption
     ok = emqx_tables:new(?SUBOPTION, [set | TabOpts]),
 
@@ -145,23 +147,23 @@ with_subid(SubId, SubOpts) ->
 
 %% @private
 do_subscribe(Topic, SubPid, SubOpts) ->
-    true = ets:insert(?SUBSCRIPTION, {SubPid, Topic}),
+    true = ets_insert_with_cache(?SUBSCRIPTION, {SubPid, Topic}),
     Group = maps:get(share, SubOpts, undefined),
     do_subscribe(Group, Topic, SubPid, SubOpts).
 
 do_subscribe(undefined, Topic, SubPid, SubOpts) ->
     case emqx_broker_helper:get_sub_shard(SubPid, Topic) of
-        0 -> true = ets:insert(?SUBSCRIBER, {Topic, SubPid}),
-             true = ets:insert(?SUBOPTION, {{SubPid, Topic}, SubOpts}),
+        0 -> true = ets_insert_with_cache(?SUBSCRIBER, {Topic, SubPid}),
+             true = ets_insert_with_cache(?SUBOPTION, {{SubPid, Topic}, SubOpts}),
              call(pick(Topic), {subscribe, Topic});
-        I -> true = ets:insert(?SUBSCRIBER, {{shard, Topic, I}, SubPid}),
-             true = ets:insert(?SUBOPTION, {{SubPid, Topic}, maps:put(shard, I, SubOpts)}),
+        I -> true = ets_insert_with_cache(?SUBSCRIBER, {{shard, Topic, I}, SubPid}),
+             true = ets_insert_with_cache(?SUBOPTION, {{SubPid, Topic}, maps:put(shard, I, SubOpts)}),
              call(pick({Topic, I}), {subscribe, Topic, I})
     end;
 
 %% Shared subscription
 do_subscribe(Group, Topic, SubPid, SubOpts) ->
-    true = ets:insert(?SUBOPTION, {{SubPid, Topic}, SubOpts}),
+    true = ets_insert_with_cache(?SUBOPTION, {{SubPid, Topic}, SubOpts}),
     emqx_shared_sub:subscribe(Group, Topic, SubPid).
 
 %%--------------------------------------------------------------------
@@ -394,7 +396,7 @@ set_subopts(SubPid, Topic, NewOpts) ->
     Sub = {SubPid, Topic},
     case ets:lookup(?SUBOPTION, Sub) of
         [{_, OldOpts}] ->
-            ets:insert(?SUBOPTION, {Sub, maps:merge(OldOpts, NewOpts)});
+            ets_insert_with_cache(?SUBOPTION, {Sub, maps:merge(OldOpts, NewOpts)});
         [] -> false
     end.
 
@@ -449,7 +451,7 @@ handle_call({subscribe, Topic, I}, _From, State) ->
     Ok = case get(Shard = {Topic, I}) of
              undefined ->
                  _ = put(Shard, true),
-                 true = ets:insert(?SUBSCRIBER, {Topic, {shard, I}}),
+                 true = ets_insert_with_cache(?SUBSCRIBER, {Topic, {shard, I}}),
                  cast(pick(Topic), {subscribe, Topic});
              true -> ok
          end,
@@ -503,3 +505,32 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %% Internal functions
 %%--------------------------------------------------------------------
+
+%% TABLE SUBOPTION
+ets_insert_with_cache(?SUBOPTION, {{SubPid, Topic}, SubOpt}) when is_binary(Topic) ->
+    CachedTopic = from_topic_cache(Topic),
+    ets:insert(?SUBOPTION, {{SubPid, CachedTopic}, SubOpt});
+%% TABLE SUBSCRIPTION
+ets_insert_with_cache(?SUBSCRIPTION, {SubPid, Topic}) when is_binary(Topic) ->
+    CachedTopic = from_topic_cache(Topic),
+    ets:insert(?SUBSCRIPTION, {SubPid, CachedTopic});
+%% TABLE SUBSCRIBER
+ets_insert_with_cache(?SUBSCRIBER, {Topic, V}) when is_binary(Topic) ->
+    CachedTopic = from_topic_cache(Topic),
+    ets:insert(?SUBSCRIBER, {CachedTopic, V});
+
+ets_insert_with_cache(?SUBSCRIBER, {{shard, Topic, I}, V}) when is_binary(Topic) ->
+    CachedTopic = from_topic_cache(Topic),
+    ets:insert(?SUBSCRIBER, {{shard, CachedTopic, I}, V}).
+
+
+%% @doc insert new obj in the cache
+%% This version will grow the cache to infinity but @TODO need some recliam strategy
+from_topic_cache(Topic) ->
+    case ets:lookup(?TOPIC_NAME_CACHE, Topic) of
+        [] ->
+            ets:insert(?TOPIC_NAME_CACHE, {Topic}),
+            Topic;
+        [{Cached}] ->
+            Cached
+    end.
