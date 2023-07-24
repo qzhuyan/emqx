@@ -92,8 +92,15 @@ shards_num() ->
     ets:lookup_element(?HELPER, shards, 2).
 
 -spec(create_seq(emqx_topic:topic()) -> emqx_sequence:seqid()).
+
+-ifndef(WITH_TOPIC_CACHE).
 create_seq(Topic) ->
     emqx_sequence:nextval(?SUBSEQ, Topic).
+-else.
+create_seq(Topic) ->
+    Topic1 = emqx_broker:from_topic_cache(Topic),
+    emqx_sequence:nextval(?SUBSEQ, Topic1).
+-endif.
 
 -spec(reclaim_seq(emqx_topic:topic()) -> emqx_sequence:seqid()).
 reclaim_seq(Topic) ->

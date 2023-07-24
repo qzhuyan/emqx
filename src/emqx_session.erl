@@ -280,9 +280,19 @@ subscribe(ClientInfo = #{clientid := ClientId}, TopicFilter, SubOpts,
             ok = emqx_broker:subscribe(TopicFilter, ClientId, SubOpts),
             ok = emqx_hooks:run('session.subscribed',
                                 [ClientInfo, TopicFilter, SubOpts#{is_new => IsNew}]),
-            {ok, Session#session{subscriptions = maps:put(TopicFilter, SubOpts, Subs)}};
+            {ok, Session#session{subscriptions = maps:put(do_get_topic(TopicFilter), SubOpts, Subs)}};
         true -> {error, ?RC_QUOTA_EXCEEDED}
     end.
+
+
+%% @FIXME wildcard...
+-ifndef(WITH_TOPIC_CACHE).
+do_get_topic(Topic) ->
+    Topic.
+-else.
+do_get_topic(Topic) ->
+    emqx_broker:from_topic_cache(Topic).
+-endif.
 
 -compile({inline, [is_subscriptions_full/1]}).
 is_subscriptions_full(#session{max_subscriptions = 0}) ->

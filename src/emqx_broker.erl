@@ -67,6 +67,11 @@
         , code_change/3
         ]).
 
+%% tmp
+-ifdef(WITH_TOPIC_CACHE).
+-export([from_topic_cache/1]).
+-endif.
+
 -import(emqx_tables, [lookup_value/2, lookup_value/3]).
 
 -ifdef(TEST).
@@ -505,7 +510,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %% Internal functions
 %%--------------------------------------------------------------------
-
+-ifndef(WITH_TOPIC_CACHE).
+ets_insert_with_cache(Table, Term) ->
+    ets:insert(Table, Term).
+-else.
 %% TABLE SUBOPTION
 ets_insert_with_cache(?SUBOPTION, {{SubPid, Topic}, SubOpt}) when is_binary(Topic) ->
     CachedTopic = from_topic_cache(Topic),
@@ -518,11 +526,9 @@ ets_insert_with_cache(?SUBSCRIPTION, {SubPid, Topic}) when is_binary(Topic) ->
 ets_insert_with_cache(?SUBSCRIBER, {Topic, V}) when is_binary(Topic) ->
     CachedTopic = from_topic_cache(Topic),
     ets:insert(?SUBSCRIBER, {CachedTopic, V});
-
 ets_insert_with_cache(?SUBSCRIBER, {{shard, Topic, I}, V}) when is_binary(Topic) ->
     CachedTopic = from_topic_cache(Topic),
     ets:insert(?SUBSCRIBER, {{shard, CachedTopic, I}, V}).
-
 
 %% @doc insert new obj in the cache
 %% This version will grow the cache to infinity but @TODO need some recliam strategy
@@ -534,3 +540,4 @@ from_topic_cache(Topic) ->
         [{Cached}] ->
             Cached
     end.
+-endif.
