@@ -179,7 +179,8 @@ do_subscribe(Group, Topic, SubPid, SubOpts) ->
 unsubscribe(Topic) when is_binary(Topic) ->
     SubPid = self(),
     case ets:lookup(?SUBOPTION, {SubPid, Topic}) of
-        [{_, SubOpts}] ->
+        [{_, SubOpts0}] ->
+            SubOpts = decompress(SubOpts0),
             emqx_trace:unsubscribe(Topic, SubOpts),
             _ = emqx_broker_helper:reclaim_seq(Topic),
             do_unsubscribe(Topic, SubPid, SubOpts);
@@ -339,7 +340,8 @@ subscriber_down(SubPid) ->
     lists:foreach(
       fun(Topic) ->
           case lookup_value(?SUBOPTION, {SubPid, Topic}) of
-              SubOpts when is_map(SubOpts) ->
+              SubOpts0 when is_map(SubOpts0) ->
+                  SubOpts = decompress(SubOpts0),
                   _ = emqx_broker_helper:reclaim_seq(Topic),
                   true = ets:delete(?SUBOPTION, {SubPid, Topic}),
                   clean_subscribe(SubOpts, Topic, SubPid);
@@ -366,7 +368,7 @@ clean_subscribe(SubOpts, Topic, SubPid) ->
 -spec(subscriptions(pid() | emqx_types:subid())
       -> [{emqx_topic:topic(), emqx_types:subopts()}]).
 subscriptions(SubPid) when is_pid(SubPid) ->
-    [{Topic, lookup_value(?SUBOPTION, {SubPid, Topic}, #{})}
+    [{Topic, decompress(lookup_value(?SUBOPTION, {SubPid, Topic}, #{}))}
       || Topic <- lookup_value(?SUBSCRIPTION, SubPid, [])];
 subscriptions(SubId) ->
     case emqx_broker_helper:lookup_subpid(SubId) of
@@ -384,7 +386,7 @@ subscribed(SubId, Topic) when ?IS_SUBID(SubId) ->
 
 -spec(get_subopts(pid(), emqx_topic:topic()) -> maybe(emqx_types:subopts())).
 get_subopts(SubPid, Topic) when is_pid(SubPid), is_binary(Topic) ->
-    lookup_value(?SUBOPTION, {SubPid, Topic});
+    decompress(lookup_value(?SUBOPTION, {SubPid, Topic}));
 get_subopts(SubId, Topic) when ?IS_SUBID(SubId) ->
     case emqx_broker_helper:lookup_subpid(SubId) of
         SubPid when is_pid(SubPid) ->
@@ -401,7 +403,7 @@ set_subopts(SubPid, Topic, NewOpts) ->
     Sub = {SubPid, Topic},
     case ets:lookup(?SUBOPTION, Sub) of
         [{_, OldOpts}] ->
-            ets_insert_with_cache(?SUBOPTION, {Sub, maps:merge(OldOpts, NewOpts)});
+            ets_insert_with_cache(?SUBOPTION, {Sub, maps:merge(decompress(OldOpts), NewOpts)});
         [] -> false
     end.
 
@@ -517,7 +519,7 @@ ets_insert_with_cache(Table, Term) ->
 %% TABLE SUBOPTION
 ets_insert_with_cache(?SUBOPTION, {{SubPid, Topic}, SubOpt}) when is_binary(Topic) ->
     CachedTopic = from_topic_cache(Topic),
-    ets:insert(?SUBOPTION, {{SubPid, CachedTopic}, SubOpt});
+    ets:insert(?SUBOPTION, {{SubPid, CachedTopic}, compress(SubOpt)});
 %% TABLE SUBSCRIPTION
 ets_insert_with_cache(?SUBSCRIPTION, {SubPid, Topic}) when is_binary(Topic) ->
     CachedTopic = from_topic_cache(Topic),
@@ -540,4 +542,64 @@ from_topic_cache(Topic) ->
         [{Cached}] ->
             Cached
     end.
--endif.
+
+compress(#{ nl := NL
+          , qos := QoS
+          , rap := Rap
+          , rh := RH
+          , sub_props := SubProps0
+          , subid := SubId
+          } = M) ->
+    Flag = maps:get(shard, M, 0)
+        bsl 2 bor QoS
+        bsl 2 bor RH
+        bsl 1 bor NL
+        bsl 1 bor Rap,
+    SubProps = case SubProps0 of
+                   _ when map_size(SubProps0) == 0 -> undefined;
+                   _ -> SubProps0
+               end,
+    #{ flag => Flag
+     , sub_props => SubProps
+     , subid => SubId
+     }.
+
+decompress(#{ flag := Flags
+            , sub_props := SubProps
+            , subid := SubId
+            }) ->
+    Rap = Flags band 1,
+    NL = (Flags bsr 1) band 1,
+    RH = (Flags bsr 2) band 3,
+    QoS = (Flags bsr 4) band 3,
+    Shard = Flags bsr 6,
+    #{ nl => NL
+     , qos => QoS
+     , rap => Rap
+     , rh => RH
+     , shard => Shard %% @TODO maybe a flag for if set
+     , sub_props => case SubProps of
+                        undefined -> #{};
+                        _ when is_map(SubProps) -> SubProps
+                    end
+     , subid => SubId
+     }.
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+subopt_compress_test() ->
+    SubOpt = #{  nl => 1
+               , qos => 1
+               , rap => 1
+               , rh => 1
+               , sub_props => #{}
+               , subid => <<"random_subid">>
+               },
+    ?assertEqual(#{flag => 23,sub_props => undefined,
+                   subid => <<"random_subid">>}, compress(SubOpt)),
+    ?assertEqual(SubOpt#{shard => 0}, decompress(#{flag => 23,sub_props => undefined,
+                                      subid => <<"random_subid">>})).
+-endif. %% TEST
+
+-endif. %% WITH_TOPIC_CACHE
