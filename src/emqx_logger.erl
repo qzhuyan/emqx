@@ -144,8 +144,7 @@ set_metadata_clientid(ClientId) ->
     try
         %% try put string format client-id metadata so
         %% so the log is not like <<"...">>
-        Id = unicode:characters_to_list(ClientId, utf8),
-        set_proc_metadata(#{clientid => Id})
+        set_proc_metadata(#{clientid => ClientId})
     catch
         _: _->
             ok
@@ -153,7 +152,7 @@ set_metadata_clientid(ClientId) ->
 
 -spec(set_metadata_peername(peername_str()) -> ok).
 set_metadata_peername(Peername) ->
-    set_proc_metadata(#{peername => Peername}).
+    set_proc_metadata(#{peername => list_to_binary(Peername)}).
 
 -spec(set_proc_metadata(logger:metadata()) -> ok).
 set_proc_metadata(Meta) ->
