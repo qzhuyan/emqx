@@ -262,7 +262,7 @@ parse_packet(#mqtt_packet_header{type = ?CONNACK}, <<AckFlags:8, ReasonCode:8, R
                         };
 
 parse_packet(#mqtt_packet_header{type = ?PUBLISH, qos = QoS}, Bin,
-             #{strict_mode := StrictMode, version := Ver}) ->
+             #{strict_mode := StrictMode, version := Ver} = Opt) ->
     {TopicName, Rest} = parse_utf8_string(Bin, StrictMode),
     {PacketId, Rest1} = case QoS of
                             ?QOS_0 -> {undefined, Rest};
@@ -271,7 +271,7 @@ parse_packet(#mqtt_packet_header{type = ?PUBLISH, qos = QoS}, Bin,
     (PacketId =/= undefined) andalso
       StrictMode andalso validate_packet_id(PacketId),
     {Properties, Payload} = parse_properties(Rest1, Ver, StrictMode),
-    Publish = #mqtt_packet_publish{topic_name = TopicName,
+    Publish = #mqtt_packet_publish{topic_name = maybe_reuse_bin(TopicName, Opt),
                                    packet_id  = PacketId,
                                    properties = Properties
                                   },
@@ -294,10 +294,10 @@ parse_packet(#mqtt_packet_header{type = PubAck}, <<PacketId:16/big, ReasonCode, 
                        };
 
 parse_packet(#mqtt_packet_header{type = ?SUBSCRIBE}, <<PacketId:16/big, Rest/binary>>,
-             #{strict_mode := StrictMode, version := Ver}) ->
+             #{strict_mode := StrictMode, version := Ver} = Opt) ->
     StrictMode andalso validate_packet_id(PacketId),
     {Properties, Rest1} = parse_properties(Rest, Ver, StrictMode),
-    TopicFilters = parse_topic_filters(subscribe, Rest1),
+    TopicFilters = parse_topic_filters(subscribe, Rest1, Opt),
     ok = validate_subqos([QoS || {_, #{qos := QoS}} <- TopicFilters]),
     #mqtt_packet_subscribe{packet_id     = PacketId,
                            properties    = Properties,
@@ -315,10 +315,10 @@ parse_packet(#mqtt_packet_header{type = ?SUBACK}, <<PacketId:16/big, Rest/binary
                        };
 
 parse_packet(#mqtt_packet_header{type = ?UNSUBSCRIBE}, <<PacketId:16/big, Rest/binary>>,
-             #{strict_mode := StrictMode, version := Ver}) ->
+             #{strict_mode := StrictMode, version := Ver} = Opt) ->
     StrictMode andalso validate_packet_id(PacketId),
     {Properties, Rest1} = parse_properties(Rest, Ver, StrictMode),
-    TopicFilters = parse_topic_filters(unsubscribe, Rest1),
+    TopicFilters = parse_topic_filters(unsubscribe, Rest1, Opt),
     #mqtt_packet_unsubscribe{packet_id     = PacketId,
                              properties    = Properties,
                              topic_filters = TopicFilters
@@ -464,12 +464,14 @@ parse_variable_byte_integer(<<1:1, Len:7, Rest/binary>>, Multiplier, Value) ->
 parse_variable_byte_integer(<<0:1, Len:7, Rest/binary>>, Multiplier, Value) ->
     {Value + Len * Multiplier, Rest}.
 
-parse_topic_filters(subscribe, Bin) ->
-    [{Topic, #{rh => Rh, rap => Rap, nl => Nl, qos => QoS}}
+parse_topic_filters(subscribe, Bin, Opt) ->
+    IsCaching = is_caching(Opt),
+    [{maybe_reuse_bin(IsCaching, Topic), #{rh => Rh, rap => Rap, nl => Nl, qos => QoS}}
      || <<Len:16/big, Topic:Len/binary, _:2, Rh:2, Rap:1, Nl:1, QoS:2>> <= Bin];
 
-parse_topic_filters(unsubscribe, Bin) ->
-    [Topic || <<Len:16/big, Topic:Len/binary>> <= Bin].
+parse_topic_filters(unsubscribe, Bin, Opt) ->
+    IsCaching = is_caching(Opt),
+    [maybe_reuse_bin(IsCaching, Topic) || <<Len:16/big, Topic:Len/binary>> <= Bin].
 
 parse_reason_codes(Bin) ->
     [Code || <<Code>> <= Bin].
@@ -905,3 +907,12 @@ validate_mqtt_utf8_char(<<16#ED, _B2, _B3, _Bs/binary>>) ->
 validate_mqtt_utf8_char(<<B1, _B2, _B3, _B4, Bs/binary>>)
   when B1 =:= 16#0F ->
     validate_mqtt_utf8_char(Bs).
+
+-spec maybe_reuse_bin(IsCahcing :: boolean(), binary()) -> binary().
+maybe_reuse_bin(false, Bin) ->
+    Bin;
+maybe_reuse_bin(true, Bin) ->
+    emqx_global_gc:reuse_bin(Bin).
+
+is_caching(Opt) ->
+    maps:get(is_cache_bin, Opt, false).

@@ -33,9 +33,15 @@
         , code_change/3
         ]).
 
+%% Lib functions
+-export([ reuse_bin/1
+        , reuse_bin/2
+        ]).
+
 %% 5 minutes
 %% -define(DEFAULT_INTERVAL, 300000).
 
+-define(GLOBAL_BIN_CACHE, '__emqx_global_gc_bin_cache__').
 %%--------------------------------------------------------------------
 %% APIs
 %%--------------------------------------------------------------------
@@ -50,11 +56,31 @@ run() -> gen_server:call(?MODULE, run, infinity).
 -spec(stop() -> ok).
 stop() -> gen_server:stop(?MODULE).
 
+%% @doc Return same binary but with existing refc binary
+%%      reduce memory footprint but come with cost a cache
+%%      insert/lookup in the Cache table.
+%%%     Limit the size of cache to reduce the overhead.
+-spec reuse_bin(Cache::ets:table(), binary()) -> binary().
+reuse_bin(Table, Bin0) when is_binary(Bin0) ->
+    case ets:lookup(Table, Bin0) of
+        [] ->
+            ets:insert(Table, {Bin0}),
+            Bin0;
+        [{Bin}] ->
+            Bin
+    end.
+reuse_bin(Bin) ->
+    reuse_bin(?GLOBAL_BIN_CACHE, Bin).
+
 %%--------------------------------------------------------------------
 %% gen_server callbacks
 %%--------------------------------------------------------------------
 
 init([]) ->
+    ok = emqx_tables:new(?GLOBAL_BIN_CACHE,
+                         [ordered_set, public,
+                          {read_concurrency, true},
+                          {write_concurrency, true}]),
     {ok, ensure_timer(#{timer => undefined})}.
 
 handle_call(run, _From, State) ->
