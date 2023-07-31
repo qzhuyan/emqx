@@ -32,6 +32,7 @@
           , mqtt_frame_options/1
           , mqtt_strict_mode/1
           , max_packet_size/1
+          , is_cache_topic_name/1
           , mountpoint/1
           , use_username_as_clientid/1
           , stats_timer/1
@@ -150,7 +151,8 @@ ratelimit(Zone) ->
 -spec(mqtt_frame_options(zone()) -> emqx_frame:options()).
 mqtt_frame_options(Zone) ->
     #{strict_mode => mqtt_strict_mode(Zone),
-      max_size    => max_packet_size(Zone)
+      max_size    => max_packet_size(Zone),
+      is_cache_bin => is_cache_topic_name(Zone)
      }.
 
 -spec(mqtt_strict_mode(zone()) -> boolean()).
@@ -160,6 +162,10 @@ mqtt_strict_mode(Zone) ->
 -spec(max_packet_size(zone()) -> integer()).
 max_packet_size(Zone) ->
     get_env(Zone, max_packet_size, ?MAX_PACKET_SIZE).
+
+-spec(is_cache_topic_name(zone()) -> boolean()).
+is_cache_topic_name(Zone) ->
+    get_env(Zone, cache_topic_name, false).
 
 -spec(mountpoint(zone()) -> maybe(emqx_mountpoint:mountpoint())).
 mountpoint(Zone) -> get_env(Zone, mountpoint).

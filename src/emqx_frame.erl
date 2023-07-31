@@ -66,7 +66,8 @@
 -define(DEFAULT_OPTIONS,
         #{strict_mode => false,
           max_size    => ?MAX_PACKET_SIZE,
-          version     => ?MQTT_PROTO_V4
+          version     => ?MQTT_PROTO_V4,
+          is_cache_bin => false
          }).
 
 -define(MULTIPLIER_MAX, 16#200000).

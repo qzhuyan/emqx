@@ -1248,6 +1248,15 @@ end}.
    {datatype, string}
  ]}.
 
+%% @doc Enable/Disable topic name caching to reduce memory footprints per topic.
+%% Ideal to enable it for the usecase where same topic is used by many clients, especially
+%% when the topic is a long string so that EMQX will not have multiple copies of the same.
+%% Value: false | true
+%% Default: false
+{mapping, "zone.$name.cache_topic_name", "emqx.zones", [
+   {datatype, {enum, [true, false]}}
+ ]}.
+
 %% @doc Max message queue length and total heap size to force shutdown
 %% connection/session process.
 %% Message queue here is the Erlang process mailbox, but not the number
