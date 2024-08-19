@@ -441,10 +441,20 @@ work_dir(TCName, CTConfig) ->
 %% @doc Delete contents of the workdir.
 clean_work_dir(WorkDir) ->
     ct:pal("Cleaning workdir ~p", [WorkDir]),
-    case re:run(WorkDir, "./_build/test/logs/") of
-        {match, _} ->
+    case
+        lists:any(
+            fun(SafeTestDir) ->
+                nomatch =/= string:prefix(WorkDir, SafeTestDir)
+            end,
+            [
+                "./_build/test/logs/",
+                "./_build/standalone_test+test/logs/"
+            ]
+        )
+    of
+        true ->
             file:del_dir_r(WorkDir);
-        nomatch ->
+        false ->
             error({unsafe_workdir, WorkDir})
     end.
 
