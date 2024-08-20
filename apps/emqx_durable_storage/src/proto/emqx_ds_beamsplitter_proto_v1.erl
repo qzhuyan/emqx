@@ -28,9 +28,9 @@
 %% API functions
 %%================================================================================
 
--spec dispatch(node(), emqx_ds_beamformer:beam()) -> true.
+-spec dispatch(node(), emqx_ds_beamformer:beam()) -> ok.
 dispatch(Node, Beam) ->
-    emqx_rpc:cast(Node, emqx_ds_beamformer, do_dispatch, [Beam]).
+    erpc:cast(Node, emqx_ds_beamformer, do_dispatch, [Beam]).
 
 %%================================================================================
 %% behavior callbacks
