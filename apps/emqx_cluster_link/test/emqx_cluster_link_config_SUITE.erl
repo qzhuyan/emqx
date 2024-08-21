@@ -662,7 +662,7 @@ conf_log() ->
     "log.file { enable = true, level = debug, path = node.log, supervisor_reports = progress }".
 
 conf_ds() ->
-    "durable_sessions.enable = true".
+    "durable_sessions { enable = true, renew_streams_interval = 100ms, idle_poll_interval = 1s}".
 
 fmt(Fmt, Args) ->
     emqx_utils:format(Fmt, Args).
