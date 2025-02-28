@@ -122,6 +122,7 @@ runs:
         mkdir -p $HOME/bin
         cp rebar3 $HOME/bin/rebar3
         export PATH="$HOME/bin:$PATH"
+        echo "QUICER_TLS_VER is ${QUICER_TLS_VER}"
         make ${{ inputs.profile }}-tgz
     - name: test ${{ inputs.profile }}
       shell: bash
