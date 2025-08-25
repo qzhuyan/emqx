@@ -653,6 +653,7 @@ pick(TopicShard) ->
 %%--------------------------------------------------------------------
 
 init([Pool, Id]) ->
+    process_flag(priority, high),
     true = gproc_pool:connect_worker(Pool, {Pool, Id}),
     {ok, #{pool => Pool, id => Id}}.
 
@@ -698,7 +699,7 @@ handle_call(Req, _From, State) ->
 
 handle_cast({dispatch, Topic, I, Msg}, State) ->
     ?BROKER_INSTR_TS(TDisp),
-    _ = do_dispatch_chans({deliver, Topic, Msg}, subscribers({shard, Topic, I}), 0),
+    ok = do_dispatch_chans({deliver, Topic, Msg}, subscribers({shard, Topic, I})),
     ?BROKER_INSTR_OBSERVE_HIST(broker, dispatch_shard_delay_us, ?US(TDisp - Msg#message.extra)),
     ?BROKER_INSTR_OBSERVE_HIST(broker, dispatch_shard_lat_us, ?US_SINCE(TDisp)),
     {noreply, State};
@@ -754,6 +755,7 @@ code_change(_OldVsn, State, _Extra) ->
 do_dispatch2(Topic, #delivery{message = MsgIn}) ->
     ?BROKER_INSTR_TS(T0),
     ?BROKER_INSTR_BIND(Msg, MsgIn, MsgIn#message{extra = T0}),
+    process_flag(priority, high),
     AsyncDispatch = persistent_term:get(?PT_FLAG_ASYNC_SHARD_DISPATCH, false),
     Deliver = {deliver, Topic, Msg},
     Shards = lookup_value(?SUBSCRIBER, {shard, Topic}, []),
@@ -763,7 +765,10 @@ do_dispatch2(Topic, #delivery{message = MsgIn}) ->
         true ->
             DispN0 = do_dispatch_shards_async(Topic, Msg, Shards, 0)
     end,
-    DispN = do_dispatch_chans(Deliver, subscribers(Topic), DispN0),
+    Subs = subscribers(Topic),
+    ok = do_dispatch_chans(Deliver, Subs),
+    DispN = length(Subs) + DispN0,
+    process_flag(priority, normal),
     ?BROKER_INSTR_OBSERVE_HIST(broker, dispatch_total_lat_us, ?US_SINCE(T0)),
     case DispN of
         0 ->
@@ -776,14 +781,22 @@ do_dispatch2(Topic, #delivery{message = MsgIn}) ->
 
 %% Don't dispatch to share subscriber here.
 %% we do it in `emqx_shared_sub.erl` with configured strategy
-do_dispatch_chans(Deliver, [SubPid | Rest], N) ->
-    SubPid ! Deliver,
-    do_dispatch_chans(Deliver, Rest, N + 1);
-do_dispatch_chans(_Deliver, [], N) ->
-    N.
+do_dispatch_chans(_Deliver, []) ->
+    ok;
+do_dispatch_chans(Deliver, Targets) ->
+    Left = lists:filter(
+        fun(X) ->
+            nosuspend =:= erlang:send(X, Deliver, [nosuspend])
+        end,
+        Targets
+    ),
+    Left =/= [] andalso io:format("~p  have something left: ~p", [?FUNCTION_NAME, length(Left)]),
+    do_dispatch_chans(Deliver, Left).
 
 do_dispatch_shards(Topic, Deliver, [I | Rest], N0) ->
-    N = do_dispatch_chans(Deliver, subscribers({shard, Topic, I}), N0),
+    Targets = subscribers({shard, Topic, I}),
+    ok = do_dispatch_chans(Deliver, Targets),
+    N = length(Targets) + N0,
     do_dispatch_shards(Topic, Deliver, Rest, N);
 do_dispatch_shards(_Topic, _Deliver, [], N) ->
     N.

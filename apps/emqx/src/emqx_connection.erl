@@ -310,6 +310,7 @@ init_state(
     Socket,
     #{zone := Zone, listener := {Type, Listener}} = Opts
 ) ->
+    on_heap = process_flag(message_queue_data, off_heap),
     {ok, Peername} = Transport:ensure_ok_or_exit(peername, [Socket]),
     {ok, Sockname} = Transport:ensure_ok_or_exit(sockname, [Socket]),
     Peercert = Transport:ensure_ok_or_exit(peercert, [Socket]),
@@ -450,7 +451,7 @@ init_stats_timer(#state{zone = Zone}) ->
 -compile({inline, [ensure_stats_timer/1]}).
 ensure_stats_timer(State = #state{stats_timer = undefined}) ->
     Timeout = get_zone_idle_timeout(State#state.zone),
-    State#state{stats_timer = start_timer(Timeout, emit_stats)};
+    State#state{stats_timer = start_timer(Timeout * 100, emit_stats)};
 ensure_stats_timer(State) ->
     %% Either already active, disabled, or paused.
     State.
@@ -866,7 +867,42 @@ handle_incoming(FrameError, State) ->
 
 %%--------------------------------------------------------------------
 %% With Channel
-
+with_channel(handle_deliver, [Delivers], State = #state{channel = Channel}) ->
+    case emqx_channel:handle_deliver(Delivers, Channel) of
+        ok ->
+            {ok, State};
+        {ok, NChannel} ->
+            {ok, State#state{channel = NChannel}};
+        {ok, Replies, NChannel} ->
+            {ok, next_msgs(Replies), State#state{channel = NChannel}};
+        {continue, Replies, NChannel} ->
+            %% NOTE: Will later go back to `emqx_channel:handle_info/2`.
+            {ok, [next_msgs(Replies), continue], State#state{channel = NChannel}};
+        {shutdown, Reason, NChannel} ->
+            shutdown(Reason, State#state{channel = NChannel});
+        {shutdown, Reason, Packet, NChannel} ->
+            NState = State#state{channel = NChannel},
+            {ok, NState2} = handle_outgoing(Packet, NState),
+            shutdown(Reason, NState2)
+    end;
+with_channel(handle_timeout, [TRef, keepalive], State = #state{channel = Channel}) ->
+    case emqx_channel:handle_timeout(TRef, keepalive, Channel) of
+        ok ->
+            {ok, State};
+        {ok, NChannel} ->
+            {ok, State#state{channel = NChannel}};
+        {ok, Replies, NChannel} ->
+            {ok, next_msgs(Replies), State#state{channel = NChannel}};
+        {continue, Replies, NChannel} ->
+            %% NOTE: Will later go back to `emqx_channel:handle_info/2`.
+            {ok, [next_msgs(Replies), continue], State#state{channel = NChannel}};
+        {shutdown, Reason, NChannel} ->
+            shutdown(Reason, State#state{channel = NChannel});
+        {shutdown, Reason, Packet, NChannel} ->
+            NState = State#state{channel = NChannel},
+            {ok, NState2} = handle_outgoing(Packet, NState),
+            shutdown(Reason, NState2)
+    end;
 with_channel(Fun, Args, State = #state{channel = Channel}) ->
     case erlang:apply(emqx_channel, Fun, Args ++ [Channel]) of
         ok ->

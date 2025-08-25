@@ -1000,31 +1000,32 @@ set_status_error(Msg) ->
             ok
         end
     ).
+msg_attrs(_) ->
+    #{}.
+%% msg_attrs(_Msg = #message{flags = #{sys := true}}) ->
+%%     #{};
+%% msg_attrs(Msg = #message{}) ->
+%%     Attrs = #{
+%%         'message.msgid' => emqx_guid:to_hexstr(Msg#message.id),
+%%         'message.qos' => Msg#message.qos,
+%%         'message.from' => Msg#message.from,
+%%         'message.topic' => Msg#message.topic,
+%%         'message.retain' => maps:get(retain, Msg#message.flags, false),
+%%         'message.payload_size' => size(Msg#message.payload)
+%%     },
+%%     msg_attr_props(Msg, Attrs).
 
-msg_attrs(_Msg = #message{flags = #{sys := true}}) ->
-    #{};
-msg_attrs(Msg = #message{}) ->
-    Attrs = #{
-        'message.msgid' => emqx_guid:to_hexstr(Msg#message.id),
-        'message.qos' => Msg#message.qos,
-        'message.from' => Msg#message.from,
-        'message.topic' => Msg#message.topic,
-        'message.retain' => maps:get(retain, Msg#message.flags, false),
-        'message.payload_size' => size(Msg#message.payload)
-    },
-    msg_attr_props(Msg, Attrs).
-
-msg_attr_props(#message{headers = #{properties := Props0 = #{'User-Property' := _}}}, Acc) ->
-    Props = maps:update_with('User-Property', fun maps:from_list/1, Props0),
-    Acc#{
-        'message.pub_props' => emqx_utils_json:encode(Props)
-    };
-msg_attr_props(#message{headers = #{properties := Props = #{}}}, Acc) ->
-    Acc#{
-        'message.pub_props' => emqx_utils_json:encode(Props)
-    };
-msg_attr_props(_Msg, Acc) ->
-    Acc.
+%% msg_attr_props(#message{headers = #{properties := Props0 = #{'User-Property' := _}}}, Acc) ->
+%%     Props = maps:update_with('User-Property', fun maps:from_list/1, Props0),
+%%     Acc#{
+%%         'message.pub_props' => emqx_utils_json:encode(Props)
+%%     };
+%% msg_attr_props(#message{headers = #{properties := Props = #{}}}, Acc) ->
+%%     Acc#{
+%%         'message.pub_props' => emqx_utils_json:encode(Props)
+%%     };
+%% msg_attr_props(_Msg, Acc) ->
+%%     Acc.
 
 with_action_metadata(#{metadata := Metadata} = _Envs, RequestContext) when
     is_map(RequestContext)

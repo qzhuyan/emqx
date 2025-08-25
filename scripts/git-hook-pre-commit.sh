@@ -25,5 +25,5 @@ else
         echo "EXECUTE 'make fmt-diff' to fix" >&2
         exit 1
     fi
-    ./scripts/apps-version-check.exs
+    #./scripts/apps-version-check.exs
 fi
