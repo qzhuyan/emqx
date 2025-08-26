@@ -265,6 +265,7 @@ stop(Pid) ->
 %%--------------------------------------------------------------------
 
 init(Parent, esockd_socket, RawSocket, Options) ->
+    on_heap = process_flag(message_queue_data, off_heap),
     case esockd_socket:wait(RawSocket) of
         {ok, Socket} ->
             ?tp(connection_started, #{
@@ -453,7 +454,7 @@ init_stats_timer(#state{zone = Zone}) ->
 -compile({inline, [ensure_stats_timer/1]}).
 ensure_stats_timer(State = #state{stats_timer = undefined}) ->
     Timeout = get_zone_idle_timeout(State#state.zone),
-    State#state{stats_timer = start_timer(Timeout, emit_stats)};
+    State#state{stats_timer = start_timer(Timeout * 100, emit_stats)};
 ensure_stats_timer(State) ->
     %% Either already active, disabled, or paused.
     State.
