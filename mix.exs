@@ -1234,7 +1234,7 @@ defmodule EMQXUmbrella.MixProject do
     if enable_quicer?(),
       # in conflict with emqx and emqtt
       do: [
-        {:quicer, github: "emqx/quic", tag: "0.1.11", override: true}
+        {:quicer, github: "emqx/quic", tag: "0.1.12", override: true}
       ],
       else: []
   end
