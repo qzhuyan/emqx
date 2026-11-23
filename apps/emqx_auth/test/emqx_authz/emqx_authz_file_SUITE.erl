@@ -74,6 +74,31 @@ t_ok(_Config) ->
         emqx_access_control:authorize(ClientInfo, ?AUTHZ_SUBSCRIBE, <<"t">>)
     ).
 
+%% The packaged ACL grants Cluster Link topics to clients with the cluster_link role.
+t_default_cluster_link_acl(_Config) ->
+    Path = filename:join(emqx_common_test_helpers:proj_root(), "apps/emqx_auth/etc/acl.conf"),
+    {ok, Rules} = file:read_file(Path),
+    ok = setup_config(#{<<"rules">> => Rules}),
+    Client = emqx_authz_test_lib:base_client_info(),
+    OtherRole = Client#{client_attrs => #{<<"role">> => <<"device">>}},
+    Link = Client#{client_attrs => #{<<"role">> => <<"cluster_link">>}},
+    lists:foreach(
+        fun({Action, Topic}) ->
+            ?assertEqual(deny, emqx_access_control:authorize(Client, Action, Topic)),
+            ?assertEqual(deny, emqx_access_control:authorize(OtherRole, Action, Topic)),
+            ?assertEqual(allow, emqx_access_control:authorize(Link, Action, Topic))
+        end,
+        [
+            {?AUTHZ_PUBLISH, <<"$LINK">>},
+            {?AUTHZ_PUBLISH, <<"$LINK/cluster/route/west">>},
+            {?AUTHZ_PUBLISH, <<"$LINK/cluster/msg/east">>},
+            {?AUTHZ_SUBSCRIBE, <<"$LINK/cluster/resp/west/node">>},
+            {?AUTHZ_SUBSCRIBE, <<"$LINK/#">>}
+        ]
+    ),
+    ?assertEqual(allow, emqx_access_control:authorize(Client, ?AUTHZ_PUBLISH, <<"t/1">>)),
+    ?assertEqual(allow, emqx_access_control:authorize(Client, ?AUTHZ_SUBSCRIBE, <<"$LINKS/#">>)).
+
 t_client_attrs(_Config) ->
     ClientInfo0 = emqx_authz_test_lib:base_client_info(),
     ClientInfo = ClientInfo0#{client_attrs => #{<<"device_id">> => <<"id1">>}},

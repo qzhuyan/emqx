@@ -5,7 +5,7 @@ links.desc:
 links.label: "Cluster Links"
 
 link.desc:
-"""Cluster link configuration"""
+"""Cluster link configuration. With the default file ACL, the remote cluster's authenticator must assign the `role` client attribute with value `cluster_link` to the link account."""
 link.label: "Cluster Link"
 
 enable.desc:
