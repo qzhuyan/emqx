@@ -7,6 +7,7 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("emqx/include/asserts.hrl").
+-include_lib("emqx/include/emqx_hooks.hrl").
 -include_lib("emqx/include/emqx_mqtt.hrl").
 -include_lib("emqx_utils/include/emqx_message.hrl").
 
@@ -63,6 +64,8 @@ mk_source_cluster(BaseName, Config) ->
         "\n     name = cl.target"
         "\n     server = \"localhost:31883\""
         "\n     clientid = client.source"
+        "\n     username = link"
+        "\n     password = test-link-password"
         "\n     topics = []"
         "\n   }"
         "\n ]}",
@@ -75,7 +78,7 @@ mk_source_cluster(BaseName, Config) ->
     SourceApps2 = [
         {emqx_conf, combine([conf_log(), SourceConf])},
         {emqx, combine([conf_mqtt_listener(41883), ExtraConf])},
-        {emqx_auth, #{}}
+        {emqx_auth, #{after_start => fun install_link_authenticator/0}}
     ],
     emqx_cth_cluster:mk_nodespecs(
         [
@@ -94,6 +97,8 @@ mk_target_cluster(BaseName, Config) ->
         "\n     name = cl.source"
         "\n     server = \"localhost:41883\""
         "\n     clientid = client.target"
+        "\n     username = link"
+        "\n     password = test-link-password"
         "\n     topics = [\"#\"]"
         "\n   }"
         "\n ]}",
@@ -101,7 +106,7 @@ mk_target_cluster(BaseName, Config) ->
     TargetApps1 = [
         {emqx_conf, combine([conf_log(), TargetConf])},
         {emqx, combine([conf_mqtt_listener(31883), ExtraConf])},
-        {emqx_auth, #{}}
+        {emqx_auth, #{after_start => fun install_link_authenticator/0}}
     ],
     TargetApps2 = [
         {emqx_conf, combine([conf_log(), TargetConf])},
@@ -123,6 +128,16 @@ conf_mqtt_listener(LPort) when is_integer(LPort) ->
     fmt("listeners.tcp.clink { bind = ~p }", [LPort]);
 conf_mqtt_listener(_) ->
     "".
+
+install_link_authenticator() ->
+    emqx_hooks:put('client.authenticate', {?MODULE, authenticate_link, []}, ?HP_HIGHEST).
+
+authenticate_link(
+    #{listener := 'tcp:clink', username := <<"link">>, password := <<"test-link-password">>}, _
+) ->
+    {stop, {ok, #{is_superuser => false, client_attrs => #{<<"role">> => <<"cluster_link">>}}}};
+authenticate_link(_, _) ->
+    ignore.
 
 conf_log() ->
     "log.file { enable = true, level = debug, path = node.log, supervisor_reports = progress }".
